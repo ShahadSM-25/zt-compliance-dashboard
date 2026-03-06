@@ -132,7 +132,7 @@ export default function Home() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-7 w-7 text-primary" />
-            <span className="text-lg font-bold tracking-tight">ZT Compliance</span>
+            <span className="text-lg font-bold tracking-tight">HealthComply</span>
             <Badge variant="secondary" className="text-xs font-mono">SA</Badge>
           </div>
           <div className="flex items-center gap-3">
@@ -322,7 +322,7 @@ export default function Home() {
         <div className="container flex flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4" />
-            <span>ZT Saudi Security Controls — Compliance Dashboard</span>
+            <span>HealthComply — Zero Trust Compliance Platform</span>
           </div>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <span>CCC Framework</span>

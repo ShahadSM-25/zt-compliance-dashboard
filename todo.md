@@ -52,3 +52,6 @@
 - [x] Error boundaries and toast notifications
 - [x] Vitest unit tests passing
 - [x] Final checkpoint and delivery
+
+## Branding Update
+- [x] Rename app title from "ZT Compliance" to "HealthComply" across all pages and metadata

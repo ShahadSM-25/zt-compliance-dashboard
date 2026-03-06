@@ -137,7 +137,7 @@ export const CONTROLS: Control[] = [
   { id: "CCC-018", controlId: "CCC-2-6-P-8-1",  pillar: "Cross-Cutting Capabilities", severity: "medium",   standards: ["CCC"],               title: "Supply Chain Security",                    description: "Software supply chain must be secured against tampering.", evidenceSource: ["tfplan"], remediationGuidance: "Implement code signing for all artifacts. Verify signatures in deployment pipeline. Maintain SBOM. Monitor for supply chain threats." },
 ];
 
-// Controls loaded — count reflects the full ZT Saudi framework
+// Controls loaded — count reflects the full HealthComply framework
 if (process.env.NODE_ENV === 'development') {
   console.info(`[Controls] Loaded ${CONTROLS.length} controls across 5 Zero Trust pillars`);
 }

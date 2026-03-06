@@ -34,7 +34,7 @@ function requireAdmin(role: string | null | undefined) {
 
 async function runMockScan(scanId: number) {
   const steps = [
-    { level: "info" as const,    message: "🚀 Starting ZT Saudi Security Controls compliance check..." },
+    { level: "info" as const,    message: "🚀 Starting HealthComply compliance check..." },
     { level: "info" as const,    message: "📋 Loading configuration from target_system.yaml..." },
     { level: "info" as const,    message: "☁️  Layer 1: Connecting to cloud provider API..." },
     { level: "success" as const, message: "✅ Cloud API connection established." },
