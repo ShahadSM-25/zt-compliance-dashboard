@@ -35,7 +35,9 @@ services:
       DATABASE_URL: mysql://healthcomply:healthcomply_pass@mysql:3306/healthcomply
       # ── Node Exporter (اتركها فارغة عند التجربة المحلية) ────────────────
       # NODE_EXPORTER_URL: http://node-exporter:9100
-      # ── Auth ────────────────────────────────────────────────────────────
+      # ── Auth (OAuth disabled by default for local testing) ──────────────────
+      # To enable OAuth, uncomment and fill in the following:
+      # OAUTH_SERVER_URL: https://your-oauth-server
       # MANUS_OAUTH_CLIENT_ID: your_client_id
       # MANUS_OAUTH_CLIENT_SECRET: your_client_secret
     volumes:

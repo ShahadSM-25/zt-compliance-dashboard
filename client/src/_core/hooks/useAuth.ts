@@ -8,6 +8,22 @@ type UseAuthOptions = {
   redirectPath?: string;
 };
 
+// Local dev mode: when VITE_OAUTH_PORTAL_URL is not set, bypass auth entirely
+const LOCAL_DEV_MODE = !import.meta.env.VITE_OAUTH_PORTAL_URL ||
+  import.meta.env.VITE_OAUTH_PORTAL_URL === "undefined";
+
+const LOCAL_DEV_USER = {
+  id: 1,
+  openId: "local-dev-user",
+  name: "Local Dev User",
+  email: "dev@healthcomply.local",
+  loginMethod: "local",
+  role: "admin" as const,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  lastSignedIn: new Date().toISOString(),
+};
+
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
     options ?? {};
@@ -16,6 +32,8 @@ export function useAuth(options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
+    // In local dev mode, skip the query entirely
+    enabled: !LOCAL_DEV_MODE,
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -25,6 +43,7 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    if (LOCAL_DEV_MODE) return; // No-op in local dev mode
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
@@ -42,6 +61,17 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
+    // In local dev mode, always return the mock user as authenticated
+    if (LOCAL_DEV_MODE) {
+      localStorage.setItem("manus-runtime-user-info", JSON.stringify(LOCAL_DEV_USER));
+      return {
+        user: LOCAL_DEV_USER,
+        loading: false,
+        error: null,
+        isAuthenticated: true,
+      };
+    }
+
     localStorage.setItem(
       "manus-runtime-user-info",
       JSON.stringify(meQuery.data)
@@ -61,13 +91,14 @@ export function useAuth(options?: UseAuthOptions) {
   ]);
 
   useEffect(() => {
+    if (LOCAL_DEV_MODE) return; // Never redirect in local dev mode
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
-    window.location.href = redirectPath
+    window.location.href = redirectPath;
   }, [
     redirectOnUnauthenticated,
     redirectPath,
