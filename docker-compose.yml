@@ -149,6 +149,32 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Prometheus (scrapes metrics from Node Exporter) ─────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: healthcomply_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - healthcomply_net
+    depends_on:
+      - node-exporter
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 # ── Networks ───────────────────────────────────────────────────────────────────
 networks:
   healthcomply_net:
@@ -159,3 +185,4 @@ volumes:
   mysql_data:
   postgres_data:
   compliance_evidence:
+  prometheus_data:

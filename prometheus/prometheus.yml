@@ -1,0 +1,31 @@
+# =============================================================================
+# Prometheus Configuration — HealthComply
+# =============================================================================
+# Prometheus scrapes metrics from Node Exporter every 15 seconds.
+# Node Exporter exposes OS-level metrics on port 9100.
+# =============================================================================
+
+global:
+  scrape_interval: 15s       # How often to scrape targets
+  evaluation_interval: 15s   # How often to evaluate rules
+
+scrape_configs:
+
+  # ── Node Exporter (OS-level metrics) ───────────────────────────────────────
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    metrics_path: /metrics
+    scheme: http
+
+  # ── HIS Mock Application (if it exposes /metrics) ──────────────────────────
+  - job_name: "his-mock"
+    static_configs:
+      - targets: ["his-mock:8000"]
+    metrics_path: /metrics
+    scheme: http
+
+  # ── Prometheus self-monitoring ──────────────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
