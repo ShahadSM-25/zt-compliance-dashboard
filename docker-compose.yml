@@ -75,37 +75,17 @@ services:
     container_name: healthcomply_his_mock
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://his_user:his_password@postgres:5432/his_db
       SECRET_KEY: "dev-secret-key-change-in-production"
       ENVIRONMENT: "development"
       RBAC_ENABLED: "true"
       AUDIT_ENABLED: "true"
       MFA_REQUIRED: "true"
       SESSION_TIMEOUT_MINUTES: "15"
-    networks:
-      - healthcomply_net
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # ── PostgreSQL (for HIS Mock) ──────────────────────────────────────────────
-  postgres:
-    image: postgres:13-alpine
-    container_name: healthcomply_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: his_db
-      POSTGRES_USER: his_user
-      POSTGRES_PASSWORD: his_password
+      EVIDENCE_DIR: "/evidence/runtime"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - compliance_evidence:/evidence
     networks:
       - healthcomply_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U his_user"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ── Nginx Reverse Proxy (for HIS Mock) ────────────────────────────────────
   nginx:
@@ -127,9 +107,9 @@ services:
 
   # ── Node Exporter ─────────────────────────────────────────────────────────
   # ⚠️  معطّل افتراضياً — لا يعمل إلا عند إضافة --profile monitoring
-  # متى تحتاجينه؟ فقط عند الاتصال بسيرفر حقيقي (OCI/AWS) لجمع مقاييس OS.
-  # لتفعيله: docker compose --profile monitoring up --build
-  # لتعطيله: docker compose up --build  (بدون --profile monitoring)
+  # متى تحتاجينه؟ فقط عند الاتصال بسيرفر حقيقي (OCI) لجمع مقاييس OS.
+  # لتفعيله:   docker compose --profile monitoring up --build
+  # لتعطيله:   docker compose up --build  (بدون --profile monitoring)
   node-exporter:
     profiles: ["monitoring"]
     image: prom/node-exporter:latest
@@ -181,6 +161,5 @@ networks:
 # ── Volumes ────────────────────────────────────────────────────────────────────
 volumes:
   mysql_data:
-  postgres_data:
   compliance_evidence:
   prometheus_data:
