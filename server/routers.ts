@@ -23,6 +23,13 @@ import {
   generateMockResults,
   computeBreakdowns,
 } from "../shared/controls";
+import { runRealScan } from "./engine";
+
+// ── Engine Mode ───────────────────────────────────────────────────────────────
+// Set USE_REAL_ENGINE=true to run the actual cloud-compliance-automation tool.
+// Falls back to mock mode if the env var is not set (safe for local dev/demo).
+const USE_REAL_ENGINE = process.env.USE_REAL_ENGINE === "true" ||
+  process.env.COMPLIANCE_ENGINE_PATH !== undefined;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -158,7 +165,16 @@ export const appRouter = router({
           message: `Scan initiated by ${ctx.user.name ?? ctx.user.email ?? "user"}`,
         });
         // Fire-and-forget background job
-        runMockScan(input.scanId).catch(async (err) => {
+        // Use real engine when COMPLIANCE_ENGINE_PATH is set, otherwise use mock
+        const scanRunner = USE_REAL_ENGINE
+          ? runRealScan(input.scanId, {
+              systemName: scan.systemName,
+              cloudProvider: scan.cloudProvider,
+              configSnapshot: (scan.configSnapshot ?? {}) as Record<string, unknown>,
+            })
+          : runMockScan(input.scanId);
+
+        scanRunner.catch(async (err) => {
           await appendScanLog({ scanId: input.scanId, level: "error", message: `Fatal error: ${err.message}` });
           await updateScan(input.scanId, { status: "failed", completedAt: new Date() });
         });

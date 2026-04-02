@@ -1,0 +1,161 @@
+version: "3.9"
+# =============================================================================
+# HealthComply — Unified Docker Compose
+# =============================================================================
+# Runs both the zt-compliance-dashboard (Frontend + API) and the
+# cloud-compliance-automation (Compliance Engine + Testbed) together.
+#
+# Usage:
+#   docker compose up --build
+#
+# The dashboard will be available at http://localhost:3000
+# =============================================================================
+
+services:
+
+  # ── Dashboard (Frontend + Backend API) ────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: healthcomply_dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # ── Engine Integration ──────────────────────────────────────────────
+      # Points the dashboard backend to the compliance engine directory
+      COMPLIANCE_ENGINE_PATH: /engine
+      USE_REAL_ENGINE: "true"
+      # ── Database ────────────────────────────────────────────────────────
+      DATABASE_URL: mysql://healthcomply:healthcomply_pass@mysql:3306/healthcomply
+      # ── Auth (copy from your .env) ──────────────────────────────────────
+      # MANUS_OAUTH_CLIENT_ID: your_client_id
+      # MANUS_OAUTH_CLIENT_SECRET: your_client_secret
+    volumes:
+      # Mount the compliance engine so the dashboard can run it
+      - ../cloud-compliance-automation:/engine:rw
+      # Shared evidence directory
+      - compliance_evidence:/engine/evidence
+    networks:
+      - healthcomply_net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      node-exporter:
+        condition: service_started
+
+  # ── MySQL Database ─────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: healthcomply_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: healthcomply
+      MYSQL_USER: healthcomply
+      MYSQL_PASSWORD: healthcomply_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - healthcomply_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "healthcomply", "-phealthcomply_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── HIS Mock Application (Testbed) ────────────────────────────────────────
+  his-mock:
+    build:
+      context: ../cloud-compliance-automation/testbed/his_mock
+      dockerfile: Dockerfile
+    container_name: healthcomply_his_mock
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://his_user:his_password@postgres:5432/his_db
+      SECRET_KEY: "dev-secret-key-change-in-production"
+      ENVIRONMENT: "development"
+      RBAC_ENABLED: "true"
+      AUDIT_ENABLED: "true"
+      MFA_REQUIRED: "true"
+      SESSION_TIMEOUT_MINUTES: "15"
+    networks:
+      - healthcomply_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── PostgreSQL (for HIS Mock) ──────────────────────────────────────────────
+  postgres:
+    image: postgres:13-alpine
+    container_name: healthcomply_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: his_db
+      POSTGRES_USER: his_user
+      POSTGRES_PASSWORD: his_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - healthcomply_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U his_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Nginx Reverse Proxy (for HIS Mock) ────────────────────────────────────
+  nginx:
+    build:
+      context: ../cloud-compliance-automation/testbed/nginx
+      dockerfile: Dockerfile
+    container_name: healthcomply_nginx
+    restart: unless-stopped
+    volumes:
+      - ../cloud-compliance-automation/testbed/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../cloud-compliance-automation/testbed/certs:/etc/nginx/certs:ro
+    ports:
+      - "8080:8080"   # HIS Mock HTTP (for testing)
+      - "8443:443"    # HIS Mock HTTPS
+    networks:
+      - healthcomply_net
+    depends_on:
+      - his-mock
+
+  # ── Node Exporter (OS-level metrics for Layer 3 compliance) ───────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: healthcomply_node_exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - healthcomply_net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  healthcomply_net:
+    driver: bridge
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  mysql_data:
+  postgres_data:
+  compliance_evidence:
