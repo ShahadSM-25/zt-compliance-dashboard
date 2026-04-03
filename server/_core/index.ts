@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { upsertUser } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -28,6 +29,23 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // ── Local Dev Mode: seed mock admin user into DB ──────────────────────────
+  if (!process.env.OAUTH_SERVER_URL) {
+    try {
+      await upsertUser({
+        openId: "local-dev-user",
+        name: "Local Dev User",
+        email: "dev@healthcomply.local",
+        loginMethod: "local",
+        role: "admin",
+        lastSignedIn: new Date(),
+      });
+      console.log("[Auth] ✅ Local dev user seeded into database.");
+    } catch (err) {
+      console.warn("[Auth] ⚠️  Could not seed local dev user (DB may not be ready yet):", err);
+    }
+  }
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
