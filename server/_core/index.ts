@@ -29,21 +29,33 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  // ── Local Dev Mode: seed mock admin user into DB ──────────────────────────
+  // ── Local Dev Mode: seed mock admin user into DB (with retry) ────────────────
   if (!process.env.OAUTH_SERVER_URL) {
-    try {
-      await upsertUser({
-        openId: "local-dev-user",
-        name: "Local Dev User",
-        email: "dev@healthcomply.local",
-        loginMethod: "local",
-        role: "admin",
-        lastSignedIn: new Date(),
-      });
-      console.log("[Auth] ✅ Local dev user seeded into database.");
-    } catch (err) {
-      console.warn("[Auth] ⚠️  Could not seed local dev user (DB may not be ready yet):", err);
-    }
+    const seedLocalDevUser = async (retries = 10, delayMs = 2000) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await upsertUser({
+            openId: "local-dev-user",
+            name: "Local Dev User",
+            email: "dev@healthcomply.local",
+            loginMethod: "local",
+            role: "admin",
+            lastSignedIn: new Date(),
+          });
+          console.log("[Auth] ✅ Local dev user seeded into database.");
+          return;
+        } catch (err: any) {
+          if (i < retries - 1) {
+            console.log(`[Auth] DB not ready yet, retrying in ${delayMs}ms... (attempt ${i + 1}/${retries})`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          } else {
+            console.warn("[Auth] ⚠️  Could not seed local dev user after all retries:", err?.message);
+          }
+        }
+      }
+    };
+    // Run seed in background so server starts immediately
+    seedLocalDevUser().catch(console.error);
   }
 
   const app = express();
