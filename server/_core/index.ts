@@ -7,7 +7,8 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { upsertUser } from "../db";
+import { upsertUser, getUserByOpenId, getDb } from "../db";
+import { users } from "../../drizzle/schema";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -34,7 +35,16 @@ async function startServer() {
     const seedLocalDevUser = async (retries = 10, delayMs = 2000) => {
       for (let i = 0; i < retries; i++) {
         try {
-          await upsertUser({
+          // Check if user already exists first to avoid ON DUPLICATE KEY issues
+          const existing = await getUserByOpenId("local-dev-user");
+          if (existing) {
+            console.log("[Auth] ✅ Local dev user already exists in database.");
+            return;
+          }
+          // User doesn't exist, create it directly
+          const db = await getDb();
+          if (!db) throw new Error("DB not available");
+          await db.insert(users).values({
             openId: "local-dev-user",
             name: "Local Dev User",
             email: "dev@healthcomply.local",
