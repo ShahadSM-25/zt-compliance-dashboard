@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { upsertUser, getUserByOpenId, getDb } from "../db";
+import { upsertUser, getUserByOpenId, getDb, runMigrations } from "../db";
 import { users } from "../../drizzle/schema";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -30,8 +30,26 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  // ── Local Dev Mode: seed mock admin user into DB (with retry) ────────────────
-  if (!process.env.OAUTH_SERVER_URL) {
+  // ── Run database migrations ────────────────────────────────────────────────────────────────────
+  // Retry migrations until DB is ready (MySQL may take a few seconds to initialize)
+  const runMigrationsWithRetry = async (retries = 15, delayMs = 2000) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await runMigrations();
+        return true;
+      } catch (err: any) {
+        if (i < retries - 1) {
+          console.log(`[Database] Not ready yet, retrying migrations in ${delayMs}ms... (${i + 1}/${retries})`);
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+      }
+    }
+    return false;
+  };
+  runMigrationsWithRetry().then(async (success) => {
+    if (!success) return;
+    // ── Local Dev Mode: seed mock admin user into DB (with retry) ────────────────
+    if (!process.env.OAUTH_SERVER_URL) {
     const seedLocalDevUser = async (retries = 10, delayMs = 2000) => {
       for (let i = 0; i < retries; i++) {
         try {
@@ -64,9 +82,10 @@ async function startServer() {
         }
       }
     };
-    // Run seed in background so server starts immediately
+     // Run seed in background so server starts immediately
     seedLocalDevUser().catch(console.error);
-  }
+    }
+  }).catch(console.error);
 
   const app = express();
   const server = createServer(app);

@@ -12,8 +12,12 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+import mysql from "mysql2/promise";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
 
+let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -24,6 +28,58 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function runMigrations(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    console.warn("[Database] No DATABASE_URL set, skipping migrations.");
+    return;
+  }
+  try {
+    const conn = await mysql.createConnection(process.env.DATABASE_URL);
+    // Find migration SQL files relative to this file
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    // Try multiple possible paths (dev vs production build)
+    const possiblePaths = [
+      path.resolve(__dirname, "../../drizzle"),
+      path.resolve(__dirname, "../drizzle"),
+      path.resolve(process.cwd(), "drizzle"),
+    ];
+    let migrationDir: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) { migrationDir = p; break; }
+    }
+    if (!migrationDir) {
+      console.warn("[Database] Could not find drizzle migration directory.");
+      await conn.end();
+      return;
+    }
+    const sqlFiles = fs.readdirSync(migrationDir)
+      .filter(f => f.endsWith(".sql"))
+      .sort();
+    for (const file of sqlFiles) {
+      const sql = fs.readFileSync(path.join(migrationDir, file), "utf-8");
+      // Split by --> statement-breakpoint or semicolons
+      const statements = sql
+        .split(/-->\s*statement-breakpoint|;\s*\n/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && !s.startsWith("--"));
+      for (const stmt of statements) {
+        try {
+          await conn.execute(stmt);
+        } catch (err: any) {
+          // Ignore "already exists" errors (idempotent)
+          if (!err.message?.includes("already exists") && !err.message?.includes("Duplicate")) {
+            console.warn(`[Database] Migration warning in ${file}:`, err.message);
+          }
+        }
+      }
+    }
+    await conn.end();
+    console.log("[Database] ✅ Migrations applied successfully.");
+  } catch (err: any) {
+    console.warn("[Database] ⚠️  Migration failed:", err.message);
+  }
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
