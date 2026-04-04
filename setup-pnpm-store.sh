@@ -19,7 +19,7 @@ echo "Setting up offline pnpm store for Docker build..."
 echo "This downloads all packages once and caches them locally."
 echo ""
 
-# Step 1: Install Node.js if missing
+# ── Step 1: Install Node.js if missing ────────────────────────────────────────
 if ! command -v node &> /dev/null; then
     echo "Node.js not found. Installing Node.js 22 LTS..."
 
@@ -41,7 +41,7 @@ if ! command -v node &> /dev/null; then
         curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
         sudo yum install -y nodejs
 
-    elif [[ "\linux-gnu" == "darwin"* ]]; then
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
         if command -v brew &> /dev/null; then
             brew install node@22
         else
@@ -53,28 +53,28 @@ if ! command -v node &> /dev/null; then
         exit 1
     fi
 
-    echo "Node.js installed: 22.13.0"
+    echo "Node.js installed: $(node --version)"
 else
-    echo "Node.js found: 22.13.0"
+    echo "Node.js found: $(node --version)"
 fi
 
-# Step 2: Install pnpm if missing
+# ── Step 2: Install pnpm if missing ───────────────────────────────────────────
 if ! command -v pnpm &> /dev/null; then
     echo "pnpm not found. Installing pnpm 10.4.1..."
-    npm install -g pnpm@10.4.1
-    echo "pnpm installed: .33.0"
+    sudo npm install -g pnpm@10.4.1
+    echo "pnpm installed: $(pnpm --version)"
 else
-    echo "pnpm found: .33.0"
+    echo "pnpm found: $(pnpm --version)"
 fi
 
-# Step 3: Populate .pnpm-store/
-STORE_DIR="\/home/ubuntu/.pnpm-store"
+# ── Step 3: Populate .pnpm-store/ ─────────────────────────────────────────────
+STORE_DIR="$(pwd)/.pnpm-store"
 echo ""
-echo "Downloading packages into: "
+echo "Downloading packages into: $STORE_DIR"
 echo "(This may take a few minutes on first run...)"
 echo ""
 
-pnpm install --no-frozen-lockfile --store-dir ""
+pnpm install --no-frozen-lockfile --store-dir "$STORE_DIR"
 
 echo ""
 echo "Done! pnpm store ready at .pnpm-store/"
