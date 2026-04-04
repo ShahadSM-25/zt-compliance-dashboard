@@ -28,7 +28,7 @@ import type { ControlResult } from "../shared/controls.js";
 
 /**
  * Path to the cloud-compliance-automation repo.
- * In Docker Compose, this is mounted as a volume.
+ * In Docker Compose, this is mounted as a volume at /engine.
  * In local dev, set COMPLIANCE_ENGINE_PATH env var.
  */
 const ENGINE_PATH = process.env.COMPLIANCE_ENGINE_PATH ||
@@ -36,6 +36,12 @@ const ENGINE_PATH = process.env.COMPLIANCE_ENGINE_PATH ||
 
 const RESULTS_FILE = path.join(ENGINE_PATH, "dashboard", "data", "compliance_results.json");
 const CONFIG_FILE  = path.join(ENGINE_PATH, "config", "target_system.yaml");
+
+// HIS Mock URL — in Docker Compose, the nginx service proxies to his-mock
+const HIS_MOCK_URL = process.env.HIS_MOCK_URL || "http://nginx:8080";
+
+// Node Exporter URL — optional, only when monitoring profile is active
+const NODE_EXPORTER_URL = process.env.NODE_EXPORTER_URL || "";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -66,6 +72,10 @@ interface EngineOutput {
     errors: number;
   };
   controls: EngineControlResult[];
+  scenarios?: Record<string, {
+    statistics: { overall_compliance: number; passed: number; failed: number };
+    controls: EngineControlResult[];
+  }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -88,13 +98,30 @@ function writeTargetConfig(config: ScanConfig): void {
       ...(snapshot.cloud as object ?? {}),
     },
     application: snapshot.application ?? existingConfig.application ?? {
-      base_url: "http://nginx:8080",
-      authentication: { method: "API_Key", api_key_env: "HIS_API_KEY", api_key_header: "X-API-Key" },
-      endpoints: { health: "/health", audit_log: "/administration/audit/events" },
+      // Use HIS_MOCK_URL env var (nginx proxy in Docker, or direct in local dev)
+      base_url: HIS_MOCK_URL,
+      authentication: {
+        method: "none",
+      },
+      endpoints: {
+        health: "/health",
+        audit_log: "/administration/audit/events",
+      },
     },
-    hosts: snapshot.hosts ?? existingConfig.hosts ?? [
-      { name: "testbed-node-exporter", ip: "node-exporter", agent_port: 9100, agent_type: "node_exporter" },
-    ],
+    // Hosts for OS-level evidence (Node Exporter).
+    // - If NODE_EXPORTER_URL is set: the collector will override the URL automatically.
+    // - If not set: point to the node-exporter Docker service (only active with --profile monitoring).
+    // - If no monitoring profile: collect_os_evidence.py will fail gracefully (non-fatal).
+    hosts: snapshot.hosts ?? existingConfig.hosts ?? (
+      NODE_EXPORTER_URL
+        ? [{
+            name: "node-exporter",
+            ip: "node-exporter",
+            agent_port: 9100,
+            agent_type: "node_exporter",
+          }]
+        : [] // No hosts = OS collection skipped gracefully
+    ),
     global: { evidence_output_dir: "/app/evidence" },
   };
 
@@ -126,6 +153,7 @@ function runCommand(
       const detectedLevel =
         trimmed.startsWith("✅") || trimmed.startsWith("🎉") ? "success"
         : trimmed.startsWith("❌") ? "error"
+        : trimmed.startsWith("⚠️") ? "warn" as "info"
         : level;
       await appendScanLog({ scanId, level: detectedLevel, message: trimmed });
     };
@@ -161,9 +189,12 @@ function runCommand(
 /**
  * Maps the engine's compliance_results.json output to the Dashboard's
  * ControlResult[] schema, merging with the CONTROLS metadata.
+ *
+ * The engine uses TC-/SC-/CCC- IDs (from Policy_Catalog_Architecture.yaml).
+ * The CONTROLS list uses the same IDs (generated from the same catalog).
  */
 function mapEngineResultsToDashboard(engineOutput: EngineOutput): ControlResult[] {
-  // Build a lookup: control_id (e.g. "IDN-001") → engine result
+  // Build a lookup: control_id (e.g. "TC-01") → engine result
   const engineLookup = new Map<string, EngineControlResult>();
   for (const r of engineOutput.controls) {
     engineLookup.set(r.control_id, r);
@@ -187,7 +218,9 @@ function mapEngineResultsToDashboard(engineOutput: EngineOutput): ControlResult[
 
     return {
       ...control,
-      status: engineResult.status === "pass" ? "pass" : "fail",
+      status: engineResult.status === "pass" ? "pass"
+            : engineResult.status === "error" ? "fail"
+            : "fail",
       violations,
     };
   });
@@ -206,6 +239,12 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
   try {
     await log("info", "🚀 Starting HealthComply real compliance check...");
     await log("info", `📋 Engine path: ${ENGINE_PATH}`);
+    await log("info", `🏥 HIS Mock URL: ${HIS_MOCK_URL}`);
+    if (NODE_EXPORTER_URL) {
+      await log("info", `🖥️  Node Exporter URL: ${NODE_EXPORTER_URL}`);
+    } else {
+      await log("info", "🖥️  Node Exporter: disabled (set NODE_EXPORTER_URL to enable)");
+    }
 
     // ── Step 1: Validate engine path ──────────────────────────────────────────
     if (!fs.existsSync(ENGINE_PATH)) {
@@ -220,20 +259,43 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
     await log("success", "✅ Configuration written successfully.");
 
     // ── Step 3: Run evidence collectors ──────────────────────────────────────
+    // Layer 1: Cloud API evidence (OCI/AWS/Azure)
     await log("info", "☁️  Layer 1: Collecting cloud infrastructure evidence...");
-    await runCommand("python3", ["collectors/collect_cloud_api_evidence.py"], ENGINE_PATH, scanId, {
-      CONFIG_PATH: CONFIG_FILE,
-    });
+    await runCommand(
+      "python3",
+      ["collectors/collect_cloud_api_evidence.py", config.cloudProvider, "/app/evidence/cloud_evidence.json"],
+      ENGINE_PATH,
+      scanId,
+      { CONFIG_PATH: CONFIG_FILE }
+    );
 
+    // Layer 2: Application evidence (HIS mock via nginx)
     await log("info", "🏥 Layer 2: Collecting HIS application evidence...");
-    await runCommand("python3", ["collectors/collect_application_evidence.py"], ENGINE_PATH, scanId, {
-      CONFIG_PATH: CONFIG_FILE,
-    });
+    await runCommand(
+      "python3",
+      ["collectors/collect_application_evidence.py"],
+      ENGINE_PATH,
+      scanId,
+      {
+        CONFIG_PATH: CONFIG_FILE,
+        // Override base_url via env in case the config file has a different value
+        HIS_BASE_URL: HIS_MOCK_URL,
+      }
+    );
 
+    // Layer 3: OS evidence via Node Exporter (optional)
     await log("info", "🖥️  Layer 3: Collecting OS-level evidence via Node Exporter...");
-    await runCommand("python3", ["collectors/collect_os_evidence.py"], ENGINE_PATH, scanId, {
-      CONFIG_PATH: CONFIG_FILE,
-    });
+    const osEnv: Record<string, string> = { CONFIG_PATH: CONFIG_FILE };
+    if (NODE_EXPORTER_URL) {
+      osEnv.NODE_EXPORTER_URL = NODE_EXPORTER_URL;
+    }
+    await runCommand(
+      "python3",
+      ["collectors/collect_os_evidence.py"],
+      ENGINE_PATH,
+      scanId,
+      osEnv
+    );
 
     // ── Step 4: Run policy evaluation ─────────────────────────────────────────
     await log("info", "⚖️  Running OPA/Conftest policy evaluation...");
@@ -257,14 +319,15 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
 
     const passed  = controlResults.filter((r) => r.status === "pass").length;
     const failed  = controlResults.filter((r) => r.status === "fail").length;
-    const score   = Math.round((passed / controlResults.length) * 100 * 10) / 10;
+    const total   = controlResults.length;
+    const score   = Math.round((passed / total) * 100 * 10) / 10;
     const { pillarBreakdown, severityBreakdown, standardBreakdown } = computeBreakdowns(controlResults);
 
     // ── Step 6: Save results to DB ────────────────────────────────────────────
     await saveScanResult({
       scanId,
       overallScore: score,
-      totalControls: controlResults.length,
+      totalControls: total,
       passedControls: passed,
       failedControls: failed,
       controlResults: controlResults as unknown as Record<string, unknown>[],
@@ -274,7 +337,7 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
     });
 
     await updateScan(scanId, { status: "completed", completedAt: new Date() });
-    await log("success", `🎉 Compliance check finished! Score: ${score}% (${passed}/${controlResults.length} controls passed)`);
+    await log("success", `🎉 Compliance check finished! Score: ${score}% (${passed}/${total} controls passed)`);
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

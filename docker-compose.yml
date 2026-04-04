@@ -33,6 +33,8 @@ services:
       USE_REAL_ENGINE: "true"
       # ── Database ────────────────────────────────────────────────────────
       DATABASE_URL: mysql://healthcomply:healthcomply_pass@mysql:3306/healthcomply
+      # ── HIS Mock URL (nginx proxy to his-mock service) ──────────────────
+      HIS_MOCK_URL: http://nginx:8080
       # ── Node Exporter (اتركها فارغة عند التجربة المحلية) ────────────────
       # NODE_EXPORTER_URL: http://node-exporter:9100
       # ── Auth (OAuth disabled by default for local testing) ──────────────────
@@ -48,6 +50,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      nginx:
+        condition: service_started
 
   # ── MySQL Database ─────────────────────────────────────────────────────────
   mysql:

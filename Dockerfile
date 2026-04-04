@@ -12,6 +12,12 @@ WORKDIR /app
 # Install system tools for compliance engine scripts
 RUN apk add --no-cache python3 py3-pip bash curl
 
+# Install OPA (Open Policy Agent) for compliance policy evaluation
+RUN curl -sL -o /usr/local/bin/opa \
+    "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static" && \
+    chmod +x /usr/local/bin/opa && \
+    opa version
+
 # Install Python dependencies needed by the compliance engine
 RUN pip3 install --no-cache-dir requests pyyaml --break-system-packages 2>/dev/null || \
     pip3 install --no-cache-dir requests pyyaml
