@@ -39,46 +39,82 @@ function requireAdmin(role: string | null | undefined) {
   }
 }
 
-async function runMockScan(scanId: number) {
+// ── Scenario-based deterministic results (derived from real OPA evaluation) ──
+// These sets reflect the actual OPA evaluation results for each scenario.
+const SCENARIO_FAILED_CONTROLS: Record<string, Set<string>> = {
+  scenario_secure: new Set([
+    "CCC-29", "CCC-31", "TC-15",
+  ]),
+  scenario_insecure: new Set([
+    "TC-01","TC-02","TC-03","TC-05","TC-06","TC-07","TC-08","TC-09","TC-10",
+    "TC-11","TC-12","TC-13","TC-14","SC-01","SC-02","SC-03","SC-04","SC-05",
+    "SC-06","SC-07","SC-08","SC-09","SC-10","SC-11","SC-12","SC-13","SC-14",
+    "SC-15","SC-16","SC-17","SC-18","SC-19","SC-20","SC-21","SC-22","SC-23",
+    "SC-24","CCC-01","CCC-02","CCC-03","CCC-04","CCC-05","CCC-06","CCC-07",
+    "CCC-08","CCC-09","CCC-10","CCC-11","CCC-12","CCC-13","CCC-14","CCC-15",
+    "CCC-16","CCC-17","CCC-18","CCC-19","CCC-20","CCC-21","CCC-22","CCC-23",
+    "CCC-24","CCC-25","CCC-26","CCC-27","CCC-28","CCC-29","CCC-30","CCC-33",
+    "CCC-37","CCC-38","CCC-40","CCC-43","CCC-44","CCC-45","CCC-46","CCC-47",
+    "CCC-48","CCC-49","CCC-51","CCC-31","TC-15",
+  ]),
+  scenario_mixed: new Set([
+    "TC-02","TC-03","TC-09","SC-02","SC-09","SC-11","CCC-04","CCC-05","CCC-06",
+    "CCC-14","CCC-17","CCC-21","CCC-22","CCC-29","CCC-30","CCC-37","CCC-31","TC-15",
+  ]),
+};
+
+function generateScenarioResults(scanMode: string) {
+  const failedSet = SCENARIO_FAILED_CONTROLS[scanMode] ?? SCENARIO_FAILED_CONTROLS["scenario_insecure"];
+  return CONTROLS.map((control) => {
+    const isFailed = failedSet.has(control.id);
+    return {
+      ...control,
+      status: isFailed ? ("fail" as const) : ("pass" as const),
+      violations: isFailed
+        ? [`${control.id} violation detected: ${control.title} is non-compliant`]
+        : [],
+    };
+  });
+}
+
+async function runMockScan(scanId: number, scanMode = "scenario_insecure") {
+  const scenarioLabels: Record<string, string> = {
+    scenario_secure:   "✅ Secure Environment (fully hardened HIS)",
+    scenario_insecure: "⚠️  Insecure Environment (misconfigured HIS)",
+    scenario_mixed:    "🔀 Mixed Environment (partially hardened HIS)",
+  };
+  const label = scenarioLabels[scanMode] ?? scenarioLabels["scenario_insecure"];
+
   const steps = [
-    { level: "info" as const,    message: "🚀 Starting HealthComply compliance check..." },
-    { level: "info" as const,    message: "📋 Loading configuration from target_system.yaml..." },
-    { level: "info" as const,    message: "☁️  Layer 1: Connecting to cloud provider API..." },
-    { level: "success" as const, message: "✅ Cloud API connection established." },
-    { level: "info" as const,    message: "🔍 Collecting IAM evidence (users, roles, policies)..." },
-    { level: "info" as const,    message: "🔍 Collecting network evidence (security groups, VPCs)..." },
-    { level: "info" as const,    message: "🔍 Collecting storage evidence (buckets, volumes)..." },
-    { level: "success" as const, message: "✅ Cloud infrastructure evidence collected (47 resources)." },
-    { level: "info" as const,    message: "🏥 Layer 2: Connecting to HIS Application API..." },
-    { level: "success" as const, message: "✅ HIS API connection established." },
-    { level: "info" as const,    message: "🔍 Checking API authentication endpoints..." },
-    { level: "info" as const,    message: "🔍 Fetching RBAC configuration..." },
-    { level: "info" as const,    message: "🔍 Pulling audit log samples..." },
-    { level: "success" as const, message: "✅ Application evidence collected (12 endpoints checked)." },
-    { level: "info" as const,    message: "🖥️  Layer 3: Connecting to OS monitoring agents..." },
-    { level: "info" as const,    message: "🔍 Collecting system configuration data..." },
-    { level: "info" as const,    message: "🔍 Checking patch levels and running services..." },
-    { level: "success" as const, message: "✅ OS-level evidence collected (3 hosts)." },
-    { level: "info" as const,    message: "🔄 Aggregating all evidence sources..." },
+    { level: "info" as const,    message: `🚀 Starting HealthComply compliance check...` },
+    { level: "info" as const,    message: `🎭 Test scenario: ${label}` },
+    { level: "info" as const,    message: "📋 Loading pre-defined evidence for selected scenario..." },
+    { level: "info" as const,    message: "☁️  Layer 1: Loading cloud infrastructure evidence..." },
+    { level: "success" as const, message: "✅ Cloud evidence loaded (47 resources)." },
+    { level: "info" as const,    message: "🏥 Layer 2: Loading HIS Application evidence..." },
+    { level: "success" as const, message: "✅ HIS evidence loaded (12 endpoints)." },
+    { level: "info" as const,    message: "🖥️  Layer 3: Loading OS-level evidence..." },
+    { level: "success" as const, message: "✅ OS evidence loaded (3 hosts)." },
     { level: "info" as const,    message: "📐 Normalising evidence to policy input schema..." },
-    { level: "success" as const, message: "✅ Evidence normalised — 84 controls ready for evaluation." },
+    { level: "success" as const, message: "✅ Evidence normalised — 98 controls ready for evaluation." },
     { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Identity pillar)..." },
     { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Devices pillar)..." },
     { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Networks pillar)..." },
-    { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Applications pillar)..." },
-    { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Cross-Cutting pillar)..." },
+    { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Applications & Workloads pillar)..." },
+    { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Visibility & Analytics pillar)..." },
+    { level: "info" as const,    message: "⚖️  Running OPA policy evaluation (Data pillar)..." },
     { level: "success" as const, message: "✅ Policy evaluation complete." },
     { level: "info" as const,    message: "📊 Generating compliance report..." },
     { level: "success" as const, message: "🎉 Compliance check finished successfully!" },
   ];
 
   for (let i = 0; i < steps.length; i++) {
-    await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
+    await new Promise((r) => setTimeout(r, 500 + Math.random() * 300));
     await appendScanLog({ scanId, level: steps[i].level, message: steps[i].message });
   }
 
-  // Generate mock results
-  const controlResults = generateMockResults(0.68);
+  // Generate deterministic results based on selected scenario
+  const controlResults = generateScenarioResults(scanMode);
   const passed = controlResults.filter((r) => r.status === "pass").length;
   const failed = controlResults.filter((r) => r.status === "fail").length;
   const score = Math.round((passed / controlResults.length) * 100 * 10) / 10;
@@ -172,7 +208,7 @@ export const appRouter = router({
               cloudProvider: scan.cloudProvider,
               configSnapshot: (scan.configSnapshot ?? {}) as Record<string, unknown>,
             })
-          : runMockScan(input.scanId);
+          : runMockScan(input.scanId, (scan.configSnapshot as any)?.scanMode ?? "scenario_insecure");
 
         scanRunner.catch(async (err) => {
           await appendScanLog({ scanId: input.scanId, level: "error", message: `Fatal error: ${err.message}` });
