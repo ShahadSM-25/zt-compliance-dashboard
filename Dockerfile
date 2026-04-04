@@ -3,8 +3,10 @@
 # =============================================================================
 # Single-stage build to avoid missing devDependencies at runtime.
 # vite is required at runtime because the server uses --packages=external.
+#
+# Network-resilient build: uses a pre-bundled pnpm store (.pnpm-store/)
+# so that `pnpm install` works fully offline — no npm registry calls needed.
 # =============================================================================
-
 FROM node:22-alpine
 
 WORKDIR /app
@@ -22,15 +24,22 @@ RUN curl -sL -o /usr/local/bin/opa \
 RUN pip3 install --no-cache-dir requests pyyaml --break-system-packages 2>/dev/null || \
     pip3 install --no-cache-dir requests pyyaml
 
-# Install pnpm
+# Install pnpm (same version as lockfile)
 RUN npm install -g pnpm@10.4.1
 
-# Copy dependency files first (for better layer caching)
+# ── Offline dependency installation ──────────────────────────────────────────
+# Copy the pre-bundled pnpm content-addressable store into the image.
+# This lets pnpm resolve all packages from the local cache without hitting
+# the npm registry, making the build fully network-independent.
+COPY .pnpm-store/ /root/.local/share/pnpm/store/
+
+# Copy dependency manifests
 COPY package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/
 
-# Install ALL dependencies (including devDependencies — vite is needed at runtime)
-RUN pnpm install --no-frozen-lockfile
+# Configure pnpm to use the store we just copied, then install offline
+RUN pnpm config set store-dir /root/.local/share/pnpm/store && \
+    pnpm install --frozen-lockfile --prefer-offline
 
 # Copy source code
 COPY . .

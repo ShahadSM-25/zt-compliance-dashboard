@@ -1,0 +1,20 @@
+# Exclude build artifacts and local dev files from Docker context
+node_modules
+dist
+.git
+.gitignore
+*.md
+!README.md
+
+# Exclude test files
+**/*.test.ts
+**/*.spec.ts
+vitest.config.ts
+
+# Exclude local dev env files
+.env
+.env.local
+.env.*.local
+
+# Keep .pnpm-store — it's needed for offline install in Dockerfile
+# (do NOT add .pnpm-store here)
