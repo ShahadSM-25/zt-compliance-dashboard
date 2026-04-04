@@ -72,6 +72,7 @@ interface EngineOutput {
     errors: number;
   };
   controls: EngineControlResult[];
+  active_scenario?: string;
   scenarios?: Record<string, {
     statistics: { overall_compliance: number; passed: number; failed: number };
     controls: EngineControlResult[];
@@ -318,23 +319,35 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
         : rawSnapshot;
     const scanMode = (parsedSnapshot.scanMode as string) ?? "real";
     await log("info", `📋 Scan mode: "${scanMode}" (configSnapshot keys: ${Object.keys(parsedSnapshot).join(", ") || "none"})`);
+
     const evalEnv: Record<string, string> = {};
+    let activeScenario: string | undefined;
+
     if (scanMode !== "real") {
       const scenarioMap: Record<string, string> = {
         scenario_secure:   "scenario_1_secure",
         scenario_insecure: "scenario_2_insecure",
         scenario_mixed:    "scenario_3_mixed",
       };
-      const engineScenario = scenarioMap[scanMode] ?? "scenario_2_insecure";
-      evalEnv.ACTIVE_SCENARIO = engineScenario;
-      await log("info", `🎭 Using test scenario: ${engineScenario}`);
+      activeScenario = scenarioMap[scanMode] ?? "scenario_2_insecure";
+      evalEnv.ACTIVE_SCENARIO = activeScenario;
+      await log("info", `🎭 Using test scenario: ${activeScenario}`);
     } else {
       await log("info", "🌐 Using live evidence from real environment");
     }
 
+    // Build CLI args: pass --scenario as a CLI argument for reliability.
+    // This is more robust than relying solely on env var propagation through
+    // Docker layers, which can sometimes be filtered or overridden.
+    const evalArgs = ["evaluation/generate_dashboard_data.py"];
+    if (activeScenario) {
+      evalArgs.push("--scenario", activeScenario);
+      await log("info", `📌 Passing scenario as CLI arg: --scenario ${activeScenario}`);
+    }
+
     await runCommand(
       "python3",
-      ["evaluation/generate_dashboard_data.py"],
+      evalArgs,
       ENGINE_PATH,
       scanId,
       evalEnv
@@ -349,7 +362,30 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
     }
 
     const engineOutput: EngineOutput = JSON.parse(fs.readFileSync(RESULTS_FILE, "utf-8"));
-    const controlResults = mapEngineResultsToDashboard(engineOutput);
+
+    // Belt-and-suspenders: if the top-level controls don't match the expected
+    // scenario (e.g. due to a race condition or stale file), prefer the controls
+    // from the specific scenario in the scenarios map.
+    let sourceControls: EngineControlResult[] = engineOutput.controls;
+
+    if (activeScenario && engineOutput.scenarios?.[activeScenario]?.controls?.length) {
+      const scenarioControls = engineOutput.scenarios[activeScenario].controls;
+      await log("info", `📊 Verifying scenario match: active_scenario="${engineOutput.active_scenario}", requested="${activeScenario}"`);
+
+      if (engineOutput.active_scenario !== activeScenario) {
+        // The file was written for a different scenario — use the scenarios map
+        await log("warn", `⚠️  active_scenario mismatch! File has "${engineOutput.active_scenario}", expected "${activeScenario}". Using scenarios.${activeScenario} controls.`);
+        sourceControls = scenarioControls;
+      } else {
+        await log("info", `✅ active_scenario matches. Using top-level controls (${sourceControls.length} controls).`);
+      }
+    }
+
+    await log("info", `📊 Mapping ${sourceControls.length} engine controls to dashboard schema...`);
+
+    // Build a synthetic EngineOutput with the correct controls for mapping
+    const resolvedOutput: EngineOutput = { ...engineOutput, controls: sourceControls };
+    const controlResults = mapEngineResultsToDashboard(resolvedOutput);
 
     const passed  = controlResults.filter((r) => r.status === "pass").length;
     const failed  = controlResults.filter((r) => r.status === "fail").length;
