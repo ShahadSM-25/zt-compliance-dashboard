@@ -3,8 +3,10 @@
 # setup-pnpm-store.sh
 # =============================================================================
 # Run this ONCE after cloning the repository, before running docker compose.
-# It downloads all npm packages into .pnpm-store/ so that docker build
-# works fully offline (no ETIMEDOUT errors from npm registry).
+# It installs Node.js + pnpm (if needed), then downloads all npm packages
+# into .pnpm-store/ so that docker build works fully offline.
+#
+# Supports: Ubuntu/Debian, RHEL/CentOS/Fedora, macOS
 #
 # Usage:
 #   chmod +x setup-pnpm-store.sh
@@ -13,24 +15,70 @@
 
 set -e
 
-echo "📦 Setting up offline pnpm store for Docker build..."
-echo "   This downloads all packages once and caches them locally."
+echo "Setting up offline pnpm store for Docker build..."
+echo "This downloads all packages once and caches them locally."
 echo ""
 
-# Check if pnpm is installed
-if ! command -v pnpm &> /dev/null; then
-    echo "⚠️  pnpm not found. Installing..."
-    npm install -g pnpm@10.4.1
+# Step 1: Install Node.js if missing
+if ! command -v node &> /dev/null; then
+    echo "Node.js not found. Installing Node.js 22 LTS..."
+
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update -qq
+        sudo apt-get install -y ca-certificates curl gnupg
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+            | sudo tee /etc/apt/sources.list.d/nodesource.list
+        sudo apt-get update -qq
+        sudo apt-get install -y nodejs
+
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y nodejs npm
+
+    elif command -v yum &> /dev/null; then
+        curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
+        sudo yum install -y nodejs
+
+    elif [[ "\linux-gnu" == "darwin"* ]]; then
+        if command -v brew &> /dev/null; then
+            brew install node@22
+        else
+            echo "Homebrew not found. Install Node.js from https://nodejs.org"
+            exit 1
+        fi
+    else
+        echo "Cannot detect package manager. Install Node.js 22 from: https://nodejs.org/en/download"
+        exit 1
+    fi
+
+    echo "Node.js installed: 22.13.0"
+else
+    echo "Node.js found: 22.13.0"
 fi
 
-# Install dependencies using a local store inside the project
-STORE_DIR="$(pwd)/.pnpm-store"
-echo "📁 Store directory: $STORE_DIR"
+# Step 2: Install pnpm if missing
+if ! command -v pnpm &> /dev/null; then
+    echo "pnpm not found. Installing pnpm 10.4.1..."
+    npm install -g pnpm@10.4.1
+    echo "pnpm installed: .33.0"
+else
+    echo "pnpm found: .33.0"
+fi
 
-pnpm install \
-    --no-frozen-lockfile \
-    --store-dir "$STORE_DIR"
+# Step 3: Populate .pnpm-store/
+STORE_DIR="\/home/ubuntu/.pnpm-store"
+echo ""
+echo "Downloading packages into: "
+echo "(This may take a few minutes on first run...)"
+echo ""
+
+pnpm install --no-frozen-lockfile --store-dir ""
 
 echo ""
-echo "✅ pnpm store ready at .pnpm-store/"
-echo "   You can now run: docker compose up --build"
+echo "Done! pnpm store ready at .pnpm-store/"
+echo ""
+echo "You can now run:"
+echo "  docker compose up --build"
+echo ""
