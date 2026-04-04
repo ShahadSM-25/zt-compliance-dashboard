@@ -202,13 +202,22 @@ export const appRouter = router({
         });
         // Fire-and-forget background job
         // Use real engine when COMPLIANCE_ENGINE_PATH is set, otherwise use mock
+        //
+        // NOTE: MySQL json() columns may return a string instead of a parsed object.
+        // We parse it here to ensure scanMode is accessible.
+        const rawCfg = scan.configSnapshot ?? {};
+        const parsedCfg: Record<string, unknown> =
+          typeof rawCfg === "string"
+            ? (() => { try { return JSON.parse(rawCfg); } catch { return {}; } })()
+            : (rawCfg as Record<string, unknown>);
+
         const scanRunner = USE_REAL_ENGINE
           ? runRealScan(input.scanId, {
               systemName: scan.systemName,
               cloudProvider: scan.cloudProvider,
-              configSnapshot: (scan.configSnapshot ?? {}) as Record<string, unknown>,
+              configSnapshot: parsedCfg,
             })
-          : runMockScan(input.scanId, (scan.configSnapshot as any)?.scanMode ?? "scenario_insecure");
+          : runMockScan(input.scanId, (parsedCfg.scanMode as string) ?? "scenario_insecure");
 
         scanRunner.catch(async (err) => {
           await appendScanLog({ scanId: input.scanId, level: "error", message: `Fatal error: ${err.message}` });

@@ -88,7 +88,12 @@ function writeTargetConfig(config: ScanConfig): void {
     ? (yaml.load(fs.readFileSync(CONFIG_FILE, "utf-8")) as Record<string, unknown>)
     : {};
 
-  const snapshot = (config.configSnapshot ?? {}) as Record<string, unknown>;
+  // Guard: MySQL json() may return a string
+  const rawSnap = config.configSnapshot ?? {};
+  const snapshot: Record<string, unknown> =
+    typeof rawSnap === "string"
+      ? (() => { try { return JSON.parse(rawSnap); } catch { return {}; } })()
+      : (rawSnap as Record<string, unknown>);
 
   const targetConfig = {
     ...existingConfig,
@@ -303,7 +308,16 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
     // Determine which scenario to use as the "main view" in the dashboard.
     // For test scenarios, the scanMode maps directly to a scenario name.
     // For real scans (scanMode === "real" or undefined), live evidence is used.
-    const scanMode = (config.configSnapshot?.scanMode as string) ?? "real";
+    //
+    // NOTE: MySQL json() columns may return a string instead of a parsed object
+    // depending on the driver version. We guard against that here.
+    const rawSnapshot = config.configSnapshot ?? {};
+    const parsedSnapshot: Record<string, unknown> =
+      typeof rawSnapshot === "string"
+        ? (() => { try { return JSON.parse(rawSnapshot); } catch { return {}; } })()
+        : rawSnapshot;
+    const scanMode = (parsedSnapshot.scanMode as string) ?? "real";
+    await log("info", `📋 Scan mode: "${scanMode}" (configSnapshot keys: ${Object.keys(parsedSnapshot).join(", ") || "none"})`);
     const evalEnv: Record<string, string> = {};
     if (scanMode !== "real") {
       const scenarioMap: Record<string, string> = {
