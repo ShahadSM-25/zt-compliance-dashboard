@@ -49,8 +49,9 @@ const PILLAR_COLORS: Record<string, string> = {
   Identity: "#6366f1",
   Devices: "#f59e0b",
   Networks: "#10b981",
-  Applications: "#3b82f6",
-  "Cross-Cutting": "#8b5cf6",
+  "Applications and Workloads": "#3b82f6",
+  Data: "#f43f5e",
+  "Visibility & Analytics": "#8b5cf6",
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -110,11 +111,12 @@ function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
 
 function PillarBadge({ pillar }: { pillar: string }) {
   const map: Record<string, string> = {
-    Identity: "pillar-identity",
-    Devices: "pillar-devices",
-    Networks: "pillar-networks",
-    Applications: "pillar-applications",
-    "Cross-Cutting": "pillar-crosscutting",
+    Identity: "bg-indigo-100 text-indigo-700",
+    Devices: "bg-amber-100 text-amber-700",
+    Networks: "bg-emerald-100 text-emerald-700",
+    "Applications and Workloads": "bg-blue-100 text-blue-700",
+    Data: "bg-rose-100 text-rose-700",
+    "Visibility & Analytics": "bg-purple-100 text-purple-700",
   };
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${map[pillar] ?? "bg-gray-100 text-gray-600"}`}>
@@ -171,7 +173,7 @@ export default function Results() {
       else pillars[c.pillar].fail++;
     });
     return Object.entries(pillars).map(([name, v]) => ({
-      name: name.replace("Cross-Cutting Capabilities", "Cross-Cutting"),
+      name: name,
       ...v,
       total: v.pass + v.fail,
       score: Math.round((v.pass / (v.pass + v.fail)) * 100),
@@ -510,7 +512,7 @@ export default function Results() {
                     </span>
                     <span className="flex-1 text-sm font-medium truncate">{control.title}</span>
                     <div className="hidden sm:flex items-center gap-2 shrink-0">
-                      <PillarBadge pillar={control.pillar?.replace("Cross-Cutting Capabilities", "Cross-Cutting") ?? ""} />
+                      <PillarBadge pillar={control.pillar ?? ""} />
                       <span
                         className="text-xs font-medium capitalize px-1.5 py-0.5 rounded"
                         style={{
@@ -554,7 +556,7 @@ export default function Results() {
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <div className="flex flex-wrap gap-2">
-                  <PillarBadge pillar={selectedControl.pillar?.replace("Cross-Cutting Capabilities", "Cross-Cutting") ?? ""} />
+                  <PillarBadge pillar={selectedControl.pillar ?? ""} />
                   <span
                     className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize"
                     style={{
