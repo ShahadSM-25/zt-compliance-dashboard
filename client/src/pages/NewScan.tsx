@@ -27,12 +27,18 @@ import {
   CheckCircle2,
   Loader2,
   Info,
+  FlaskConical,
+  Globe,
+  ShieldAlert,
+  ShieldOff,
+  Shuffle,
 } from "lucide-react";
 import { getLoginUrl } from "@/const";
 
 type CloudProvider = "oci" | "aws" | "azure";
 type AuthMethod = "oauth2" | "api_key" | "bearer";
 type AgentType = "node_exporter" | "osquery" | "none";
+type ScanMode = "scenario_secure" | "scenario_insecure" | "scenario_mixed" | "real";
 
 interface HostEntry {
   id: string;
@@ -42,17 +48,103 @@ interface HostEntry {
   agentType: AgentType;
 }
 
-const STEPS = [
-  { id: 1, label: "System Info", icon: Info },
-  { id: 2, label: "Cloud Config", icon: Cloud },
-  { id: 3, label: "Application API", icon: Server },
-  { id: 4, label: "Target Hosts", icon: ShieldCheck },
+// ── Scenario definitions ──────────────────────────────────────────────────────
+const SCENARIOS: {
+  id: ScanMode;
+  label: string;
+  description: string;
+  badge: string;
+  badgeColor: string;
+  icon: React.ElementType;
+  expectedScore: string;
+  details: string[];
+}[] = [
+  {
+    id: "scenario_secure",
+    label: "Secure Environment",
+    description: "Simulates a fully hardened HIS deployment with all security controls properly configured.",
+    badge: "Test Scenario",
+    badgeColor: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    icon: ShieldCheck,
+    expectedScore: "~85%",
+    details: [
+      "MFA enforced on all accounts",
+      "TLS 1.2+ on all endpoints",
+      "Audit logging fully enabled",
+      "Encryption at rest configured",
+      "Role-based access control active",
+    ],
+  },
+  {
+    id: "scenario_insecure",
+    label: "Insecure Environment",
+    description: "Simulates a poorly configured HIS with multiple security gaps — useful for demonstrating violation detection.",
+    badge: "Test Scenario",
+    badgeColor: "bg-red-100 text-red-700 border-red-200",
+    icon: ShieldOff,
+    expectedScore: "~15%",
+    details: [
+      "No MFA configured",
+      "Weak authentication methods",
+      "Missing audit logs",
+      "Unencrypted data at rest",
+      "Overly permissive access policies",
+    ],
+  },
+  {
+    id: "scenario_mixed",
+    label: "Mixed Environment",
+    description: "Simulates a partially hardened HIS — some controls pass, others fail. Reflects a typical real-world state.",
+    badge: "Test Scenario",
+    badgeColor: "bg-amber-100 text-amber-700 border-amber-200",
+    icon: Shuffle,
+    expectedScore: "~50%",
+    details: [
+      "MFA on some accounts only",
+      "Partial TLS coverage",
+      "Incomplete audit logging",
+      "Mixed encryption posture",
+      "Some access controls missing",
+    ],
+  },
+  {
+    id: "real",
+    label: "Real Environment",
+    description: "Connect to your actual HIS system and cloud infrastructure for a live compliance assessment.",
+    badge: "Live Scan",
+    badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
+    icon: Globe,
+    expectedScore: "Actual",
+    details: [
+      "Connects to your real HIS API",
+      "Collects live cloud infrastructure evidence",
+      "Evaluates OS-level metrics via Node Exporter",
+      "Results reflect your actual compliance posture",
+      "Requires valid credentials and network access",
+    ],
+  },
 ];
 
-function StepIndicator({ current }: { current: number }) {
+const STEPS = [
+  { id: 1, label: "Scan Mode", icon: FlaskConical },
+  { id: 2, label: "System Info", icon: Info },
+  { id: 3, label: "Cloud Config", icon: Cloud },
+  { id: 4, label: "Application API", icon: Server },
+  { id: 5, label: "Target Hosts", icon: ShieldCheck },
+];
+
+// For test scenarios, steps 3-5 are skipped
+const REAL_STEPS = STEPS;
+const SCENARIO_STEPS = [
+  { id: 1, label: "Scan Mode", icon: FlaskConical },
+  { id: 2, label: "System Info", icon: Info },
+];
+
+function StepIndicator({ current, isReal }: { current: number; isReal: boolean }) {
+  const steps = isReal ? REAL_STEPS : SCENARIO_STEPS;
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
-      {STEPS.map((step, idx) => {
+      {steps.map((step, idx) => {
         const Icon = step.icon;
         const isCompleted = current > step.id;
         const isCurrent = current === step.id;
@@ -82,7 +174,7 @@ function StepIndicator({ current }: { current: number }) {
                 {step.label}
               </span>
             </div>
-            {idx < STEPS.length - 1 && (
+            {idx < steps.length - 1 && (
               <div
                 className={`h-0.5 w-12 sm:w-20 mx-1 mb-4 transition-all ${
                   current > step.id ? "bg-primary" : "bg-muted-foreground/20"
@@ -102,11 +194,15 @@ export default function NewScan() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Step 1: System Info
+  // Step 1: Scan Mode
+  const [scanMode, setScanMode] = useState<ScanMode | null>(null);
+  const isReal = scanMode === "real";
+
+  // Step 2: System Info
   const [systemName, setSystemName] = useState("");
   const [systemDescription, setSystemDescription] = useState("");
 
-  // Step 2: Cloud Config
+  // Step 3: Cloud Config (real only)
   const [cloudProvider, setCloudProvider] = useState<CloudProvider>("oci");
   const [ociCompartmentId, setOciCompartmentId] = useState("");
   const [awsAccountId, setAwsAccountId] = useState("");
@@ -114,7 +210,7 @@ export default function NewScan() {
   const [azureSubscriptionId, setAzureSubscriptionId] = useState("");
   const [azureTenantId, setAzureTenantId] = useState("");
 
-  // Step 3: Application API
+  // Step 4: Application API (real only)
   const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [authMethod, setAuthMethod] = useState<AuthMethod>("oauth2");
   const [tokenUrl, setTokenUrl] = useState("");
@@ -122,7 +218,7 @@ export default function NewScan() {
   const [clientSecretEnv, setClientSecretEnv] = useState("HIS_CLIENT_SECRET");
   const [apiKeyEnv, setApiKeyEnv] = useState("HIS_API_KEY");
 
-  // Step 4: Target Hosts
+  // Step 5: Target Hosts (real only)
   const [hosts, setHosts] = useState<HostEntry[]>([
     { id: "1", name: "app-server-01", ip: "", agentPort: "9100", agentType: "node_exporter" },
   ]);
@@ -162,23 +258,31 @@ export default function NewScan() {
     setHosts((prev) => prev.map((h) => (h.id === id ? { ...h, [field]: value } : h)));
   };
 
+  // Max step depends on mode
+  const maxStep = isReal ? 5 : 2;
+
   const canProceed = () => {
-    if (step === 1) return systemName.trim().length > 0;
-    if (step === 2) {
+    if (step === 1) return scanMode !== null;
+    if (step === 2) return systemName.trim().length > 0;
+    if (step === 3) {
       if (cloudProvider === "oci") return ociCompartmentId.trim().length > 0;
       if (cloudProvider === "aws") return awsAccountId.trim().length > 0;
       if (cloudProvider === "azure") return azureSubscriptionId.trim().length > 0;
     }
-    if (step === 3) return apiBaseUrl.trim().length > 0;
+    if (step === 4) return apiBaseUrl.trim().length > 0;
     return true;
   };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const configSnapshot = {
+      const configSnapshot: Record<string, unknown> = {
+        scanMode,
         system: { name: systemName, description: systemDescription },
-        cloud: {
+      };
+
+      if (isReal) {
+        configSnapshot.cloud = {
           provider: cloudProvider,
           ...(cloudProvider === "oci" && { compartmentId: ociCompartmentId }),
           ...(cloudProvider === "aws" && { accountId: awsAccountId, region: awsRegion }),
@@ -186,27 +290,27 @@ export default function NewScan() {
             subscriptionId: azureSubscriptionId,
             tenantId: azureTenantId,
           }),
-        },
-        application: {
+        };
+        configSnapshot.application = {
           baseUrl: apiBaseUrl,
           authentication: {
             method: authMethod,
             ...(authMethod === "oauth2" && { tokenUrl, clientIdEnv, clientSecretEnv }),
             ...(authMethod === "api_key" && { apiKeyEnv }),
           },
-        },
-        hosts: hosts.map((h) => ({
+        };
+        configSnapshot.hosts = hosts.map((h) => ({
           name: h.name,
           ip: h.ip,
           agentPort: parseInt(h.agentPort) || 9100,
           agentType: h.agentType,
-        })),
-      };
+        }));
+      }
 
       const scan = await createScan.mutateAsync({
         systemName,
         systemDescription,
-        cloudProvider,
+        cloudProvider: isReal ? cloudProvider : "oci",
         configSnapshot,
       });
 
@@ -220,6 +324,8 @@ export default function NewScan() {
       setIsSubmitting(false);
     }
   };
+
+  const selectedScenario = SCENARIOS.find((s) => s.id === scanMode);
 
   return (
     <div className="min-h-screen bg-background">
@@ -237,10 +343,96 @@ export default function NewScan() {
       </div>
 
       <div className="container py-8 max-w-2xl mx-auto">
-        <StepIndicator current={step} />
+        <StepIndicator current={step} isReal={isReal} />
 
-        {/* ── Step 1: System Info ─────────────────────────────────────────── */}
+        {/* ── Step 1: Scan Mode ───────────────────────────────────────────── */}
         {step === 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-primary" />
+                Choose Scan Mode
+              </CardTitle>
+              <CardDescription>
+                Select a pre-defined test scenario to evaluate the engine, or connect to your real
+                environment for a live compliance assessment.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {SCENARIOS.map((scenario) => {
+                const Icon = scenario.icon;
+                const isSelected = scanMode === scenario.id;
+                return (
+                  <button
+                    key={scenario.id}
+                    onClick={() => setScanMode(scenario.id)}
+                    className={`w-full text-left rounded-xl border-2 p-4 transition-all hover:border-primary/60 focus:outline-none ${
+                      isSelected
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                          isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm">{scenario.label}</span>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${scenario.badgeColor}`}
+                          >
+                            {scenario.badge}
+                          </span>
+                          <span className="ml-auto text-xs text-muted-foreground font-mono">
+                            Expected: {scenario.expectedScore}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                          {scenario.description}
+                        </p>
+                        {isSelected && (
+                          <ul className="mt-2 space-y-0.5">
+                            {scenario.details.map((d, i) => (
+                              <li key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
+                                {d}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {scanMode && !isReal && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                  <strong>Test Scenario:</strong> This will run the compliance engine against
+                  pre-defined evidence files. No real system credentials are required. Results are
+                  deterministic and reproducible.
+                </div>
+              )}
+              {isReal && (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+                  <strong>Live Scan:</strong> You will be asked to provide your HIS API URL, cloud
+                  credentials, and target host details in the next steps.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Step 2: System Info ─────────────────────────────────────────── */}
+        {step === 2 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -248,17 +440,42 @@ export default function NewScan() {
                 System Information
               </CardTitle>
               <CardDescription>
-                Identify the healthcare system you want to assess for compliance.
+                {isReal
+                  ? "Identify the healthcare system you want to assess for compliance."
+                  : `Running: ${selectedScenario?.label} — give this scan a name for your records.`}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              {selectedScenario && (
+                <div
+                  className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+                    isReal
+                      ? "bg-blue-50 border-blue-200 text-blue-800"
+                      : "bg-muted/40 border-border text-muted-foreground"
+                  }`}
+                >
+                  {(() => {
+                    const Icon = selectedScenario.icon;
+                    return <Icon className="h-4 w-4 shrink-0" />;
+                  })()}
+                  <span>
+                    <strong>{selectedScenario.label}</strong>
+                    {!isReal && ` — Expected score: ${selectedScenario.expectedScore}`}
+                  </span>
+                  <span
+                    className={`ml-auto inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${selectedScenario.badgeColor}`}
+                  >
+                    {selectedScenario.badge}
+                  </span>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="sysname">
                   System Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="sysname"
-                  placeholder="e.g. National HIS — Production"
+                  placeholder={isReal ? "e.g. National HIS — Production" : `e.g. ${selectedScenario?.label} Test`}
                   value={systemName}
                   onChange={(e) => setSystemName(e.target.value)}
                 />
@@ -282,37 +499,34 @@ export default function NewScan() {
           </Card>
         )}
 
-        {/* ── Step 2: Cloud Config ────────────────────────────────────────── */}
-        {step === 2 && (
+        {/* ── Step 3: Cloud Config (real only) ────────────────────────────── */}
+        {step === 3 && isReal && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Cloud className="h-5 w-5 text-primary" />
-                Cloud Infrastructure
+                Cloud Provider
               </CardTitle>
               <CardDescription>
-                Configure access to your cloud provider for infrastructure evidence collection.
+                Select your cloud provider and provide the necessary identifiers for evidence
+                collection.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
                 <Label>Cloud Provider</Label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   {(["oci", "aws", "azure"] as CloudProvider[]).map((p) => (
                     <button
                       key={p}
-                      type="button"
                       onClick={() => setCloudProvider(p)}
-                      className={`rounded-lg border-2 p-3 text-center transition-all ${
+                      className={`rounded-lg border-2 py-3 text-sm font-semibold uppercase tracking-wide transition-all ${
                         cloudProvider === p
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-muted-foreground/40"
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-border text-muted-foreground hover:border-primary/40"
                       }`}
                     >
-                      <div className="font-bold text-sm uppercase">{p}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {p === "oci" ? "Oracle Cloud" : p === "aws" ? "Amazon Web Services" : "Microsoft Azure"}
-                      </div>
+                      {p}
                     </button>
                   ))}
                 </div>
@@ -320,31 +534,26 @@ export default function NewScan() {
 
               {cloudProvider === "oci" && (
                 <div className="space-y-2">
-                  <Label htmlFor="compartment">
-                    Compartment OCID <span className="text-destructive">*</span>
+                  <Label htmlFor="oci-compartment">
+                    Compartment ID <span className="text-destructive">*</span>
                   </Label>
                   <Input
-                    id="compartment"
+                    id="oci-compartment"
                     placeholder="ocid1.compartment.oc1..aaaa..."
                     value={ociCompartmentId}
                     onChange={(e) => setOciCompartmentId(e.target.value)}
                     className="font-mono text-sm"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Found in OCI Console → Identity → Compartments. Credentials are read from{" "}
-                    <code className="bg-muted px-1 rounded">~/.oci/config</code>.
-                  </p>
                 </div>
               )}
-
               {cloudProvider === "aws" && (
-                <div className="space-y-4">
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="awsacct">
+                    <Label htmlFor="aws-account">
                       AWS Account ID <span className="text-destructive">*</span>
                     </Label>
                     <Input
-                      id="awsacct"
+                      id="aws-account"
                       placeholder="123456789012"
                       value={awsAccountId}
                       onChange={(e) => setAwsAccountId(e.target.value)}
@@ -352,30 +561,25 @@ export default function NewScan() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="awsregion">Region</Label>
+                    <Label htmlFor="aws-region">Region</Label>
                     <Input
-                      id="awsregion"
+                      id="aws-region"
                       placeholder="us-east-1"
                       value={awsRegion}
                       onChange={(e) => setAwsRegion(e.target.value)}
                       className="font-mono text-sm"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Credentials are read from <code className="bg-muted px-1 rounded">AWS_ACCESS_KEY_ID</code> and{" "}
-                    <code className="bg-muted px-1 rounded">AWS_SECRET_ACCESS_KEY</code> environment variables.
-                  </p>
-                </div>
+                </>
               )}
-
               {cloudProvider === "azure" && (
-                <div className="space-y-4">
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="azsub">
+                    <Label htmlFor="azure-sub">
                       Subscription ID <span className="text-destructive">*</span>
                     </Label>
                     <Input
-                      id="azsub"
+                      id="azure-sub"
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                       value={azureSubscriptionId}
                       onChange={(e) => setAzureSubscriptionId(e.target.value)}
@@ -383,47 +587,46 @@ export default function NewScan() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="aztenant">Tenant ID</Label>
+                    <Label htmlFor="azure-tenant">Tenant ID</Label>
                     <Input
-                      id="aztenant"
+                      id="azure-tenant"
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                       value={azureTenantId}
                       onChange={(e) => setAzureTenantId(e.target.value)}
                       className="font-mono text-sm"
                     />
                   </div>
-                </div>
+                </>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* ── Step 3: Application API ─────────────────────────────────────── */}
-        {step === 3 && (
+        {/* ── Step 4: Application API (real only) ─────────────────────────── */}
+        {step === 4 && isReal && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Server className="h-5 w-5 text-primary" />
-                Application API Configuration
+                HIS Application API
               </CardTitle>
               <CardDescription>
-                Configure access to the HIS application API for runtime evidence collection.
+                Configure how the compliance engine connects to your Health Information System.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="apiurl">
-                  API Base URL <span className="text-destructive">*</span>
+                <Label htmlFor="api-url">
+                  Base URL <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="apiurl"
-                  placeholder="https://api.your-his.com/v1"
+                  id="api-url"
+                  placeholder="https://his.hospital.sa/api/v1"
                   value={apiBaseUrl}
                   onChange={(e) => setApiBaseUrl(e.target.value)}
                   className="font-mono text-sm"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>Authentication Method</Label>
                 <Select value={authMethod} onValueChange={(v) => setAuthMethod(v as AuthMethod)}>
@@ -433,18 +636,17 @@ export default function NewScan() {
                   <SelectContent>
                     <SelectItem value="oauth2">OAuth 2.0 Client Credentials</SelectItem>
                     <SelectItem value="api_key">API Key</SelectItem>
-                    <SelectItem value="bearer">Static Bearer Token</SelectItem>
+                    <SelectItem value="bearer">Bearer Token</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
               {authMethod === "oauth2" && (
-                <div className="space-y-4 rounded-lg border border-border p-4 bg-muted/30">
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="tokenurl">Token URL</Label>
+                    <Label htmlFor="token-url">Token URL</Label>
                     <Input
-                      id="tokenurl"
-                      placeholder="https://auth.your-his.com/oauth/token"
+                      id="token-url"
+                      placeholder="https://auth.hospital.sa/oauth/token"
                       value={tokenUrl}
                       onChange={(e) => setTokenUrl(e.target.value)}
                       className="font-mono text-sm"
@@ -452,47 +654,46 @@ export default function NewScan() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label htmlFor="clientidenv">Client ID Env Var</Label>
+                      <Label htmlFor="client-id-env">Client ID Env Var</Label>
                       <Input
-                        id="clientidenv"
+                        id="client-id-env"
+                        placeholder="HIS_CLIENT_ID"
                         value={clientIdEnv}
                         onChange={(e) => setClientIdEnv(e.target.value)}
                         className="font-mono text-sm"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="clientsecretenv">Client Secret Env Var</Label>
+                      <Label htmlFor="client-secret-env">Client Secret Env Var</Label>
                       <Input
-                        id="clientsecretenv"
+                        id="client-secret-env"
+                        placeholder="HIS_CLIENT_SECRET"
                         value={clientSecretEnv}
                         onChange={(e) => setClientSecretEnv(e.target.value)}
                         className="font-mono text-sm"
                       />
                     </div>
                   </div>
-                </div>
+                </>
               )}
-
               {authMethod === "api_key" && (
-                <div className="space-y-2 rounded-lg border border-border p-4 bg-muted/30">
-                  <Label htmlFor="apikeyenv">API Key Environment Variable</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="api-key-env">API Key Env Var</Label>
                   <Input
-                    id="apikeyenv"
+                    id="api-key-env"
+                    placeholder="HIS_API_KEY"
                     value={apiKeyEnv}
                     onChange={(e) => setApiKeyEnv(e.target.value)}
                     className="font-mono text-sm"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    The tool will read the API key from this environment variable at runtime.
-                  </p>
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* ── Step 4: Target Hosts ────────────────────────────────────────── */}
-        {step === 4 && (
+        {/* ── Step 5: Target Hosts (real only) ────────────────────────────── */}
+        {step === 5 && isReal && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -597,19 +798,20 @@ export default function NewScan() {
             {step === 1 ? "Cancel" : "Back"}
           </Button>
 
-          {step < 4 ? (
+          {step < maxStep ? (
             <Button onClick={() => setStep(step + 1)} disabled={!canProceed()}>
               Next <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="px-8">
+            <Button onClick={handleSubmit} disabled={isSubmitting || !canProceed()} className="px-8">
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Starting Scan...
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="h-4 w-4 mr-2" /> Start Compliance Scan
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  {isReal ? "Start Live Scan" : "Run Test Scenario"}
                 </>
               )}
             </Button>

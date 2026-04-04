@@ -299,11 +299,31 @@ export async function runRealScan(scanId: number, config: ScanConfig): Promise<v
 
     // ── Step 4: Run policy evaluation ─────────────────────────────────────────
     await log("info", "⚖️  Running OPA/Conftest policy evaluation...");
+
+    // Determine which scenario to use as the "main view" in the dashboard.
+    // For test scenarios, the scanMode maps directly to a scenario name.
+    // For real scans (scanMode === "real" or undefined), live evidence is used.
+    const scanMode = (config.configSnapshot?.scanMode as string) ?? "real";
+    const evalEnv: Record<string, string> = {};
+    if (scanMode !== "real") {
+      const scenarioMap: Record<string, string> = {
+        scenario_secure:   "scenario_1_secure",
+        scenario_insecure: "scenario_2_insecure",
+        scenario_mixed:    "scenario_3_mixed",
+      };
+      const engineScenario = scenarioMap[scanMode] ?? "scenario_2_insecure";
+      evalEnv.ACTIVE_SCENARIO = engineScenario;
+      await log("info", `🎭 Using test scenario: ${engineScenario}`);
+    } else {
+      await log("info", "🌐 Using live evidence from real environment");
+    }
+
     await runCommand(
       "python3",
       ["evaluation/generate_dashboard_data.py"],
       ENGINE_PATH,
-      scanId
+      scanId,
+      evalEnv
     );
     await log("success", "✅ Policy evaluation complete.");
 
