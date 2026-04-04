@@ -274,7 +274,7 @@ export default function NewScan() {
                 />
               </div>
               <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm text-blue-800">
-                <strong>What will be assessed:</strong> 84 Zero Trust controls across Identity,
+                <strong>What will be assessed:</strong> 98 Zero Trust controls across Identity,
                 Devices, Networks, Applications, and Cross-Cutting Capabilities — mapped to CCC,
                 HIPAA, and SeHE standards.
               </div>
@@ -580,7 +580,7 @@ export default function NewScan() {
               {/* Summary */}
               <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
                 <strong>Ready to scan:</strong> {systemName} on {cloudProvider.toUpperCase()} with{" "}
-                {hosts.length} host{hosts.length !== 1 ? "s" : ""}. The scan will evaluate all 84
+                {hosts.length} host{hosts.length !== 1 ? "s" : ""}. The scan will evaluate all 98
                 controls and generate a full compliance report.
               </div>
             </CardContent>
