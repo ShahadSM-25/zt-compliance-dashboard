@@ -44,7 +44,10 @@ services:
       # MANUS_OAUTH_CLIENT_SECRET: your_client_secret
     volumes:
       - ../cloud-compliance-automation:/engine:rw
-      - compliance_evidence:/engine/evidence
+      # Mount only the runtime subdirectory so the named volume does NOT shadow
+      # the scenario evidence files (scenario_1_secure_input.json, etc.) that
+      # live in the bind-mounted /engine/evidence directory.
+      - compliance_evidence:/engine/evidence/runtime
     networks:
       - healthcomply_net
     depends_on:
@@ -87,9 +90,10 @@ services:
       AUDIT_ENABLED: "true"
       MFA_REQUIRED: "true"
       SESSION_TIMEOUT_MINUTES: "15"
-      EVIDENCE_DIR: "/evidence/runtime"
+      EVIDENCE_DIR: "/engine/evidence/runtime"
     volumes:
-      - compliance_evidence:/evidence
+      - ../cloud-compliance-automation:/engine:rw
+      - compliance_evidence:/engine/evidence/runtime
     networks:
       - healthcomply_net
 
