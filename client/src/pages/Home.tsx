@@ -6,6 +6,7 @@ import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
 import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
+  ShieldCheck,
   Cloud,
   Cpu,
   Network,

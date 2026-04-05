@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
+  ShieldCheck,
   Cloud,
   Server,
   Plus,
