@@ -142,7 +142,7 @@ export default function Home() {
       <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
-            <HealthComplyLogo size={32} />
+            <HealthComplyLogo size={44} />
             <Badge variant="secondary" className="text-xs font-mono">SA</Badge>
           </div>
           <div className="flex items-center gap-3">
@@ -173,7 +173,7 @@ export default function Home() {
               98 Controls · 6 Zero Trust Pillars · 3 Standards
             </Badge>
             <h1 className="mb-6 text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-              Zero Trust Compliance
+              Health Compliance
               <span className="block text-blue-400">Assessment Platform</span>
             </h1>
             <p className="mb-8 text-lg text-slate-300 sm:text-xl">

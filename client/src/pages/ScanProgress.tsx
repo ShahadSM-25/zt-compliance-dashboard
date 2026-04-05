@@ -119,7 +119,7 @@ export default function ScanProgress() {
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
-            <HealthComplyLogo size={22} showText={false} />
+            <HealthComplyLogo size={36} showText={false} />
             <span className="font-semibold">Compliance Scan</span>
             {scan && (
               <Badge variant="secondary" className="text-xs font-mono">

@@ -250,7 +250,7 @@ export default function Results() {
               <ArrowLeft className="h-4 w-4 mr-1" /> Dashboard
             </Button>
             <div className="h-4 w-px bg-border" />
-            <HealthComplyLogo size={22} showText={false} />
+            <HealthComplyLogo size={36} showText={false} />
             <span className="font-semibold hidden sm:block">{scan.systemName}</span>
             <Badge variant="secondary" className="text-xs font-mono">#{scan.id}</Badge>
           </div>

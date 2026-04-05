@@ -337,7 +337,7 @@ export default function NewScan() {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <div className="flex items-center gap-2">
-            <HealthComplyLogo size={22} showText={false} />
+            <HealthComplyLogo size={36} showText={false} />
             <span className="font-semibold">New Compliance Scan</span>
           </div>
         </div>

@@ -118,7 +118,7 @@ export default function Dashboard() {
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-2">
-            <HealthComplyLogo size={28} />
+            <HealthComplyLogo size={40} />
             <Badge variant="secondary" className="text-xs font-mono hidden sm:flex">SA</Badge>
           </div>
           <div className="flex items-center gap-2">
