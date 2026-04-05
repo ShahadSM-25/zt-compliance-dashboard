@@ -142,7 +142,7 @@ export default function Home() {
       <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
-            <HealthComplyLogo size={66} />
+            <HealthComplyLogo size={70} />
             <Badge variant="secondary" className="text-xs font-mono">SA</Badge>
           </div>
           <div className="flex items-center gap-3">
@@ -331,7 +331,7 @@ export default function Home() {
       <footer className="border-t border-border bg-muted/30 py-8">
         <div className="container flex flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <HealthComplyLogo size={20} />
+            <HealthComplyLogo size={70} />
             <span>Zero Trust Compliance Platform</span>
           </div>
           <div className="flex gap-4 text-xs text-muted-foreground">

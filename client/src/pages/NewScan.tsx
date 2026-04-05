@@ -231,7 +231,7 @@ export default function NewScan() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-sm text-center p-8">
-          <div className="mx-auto mb-4 flex justify-center"><HealthComplyLogo size={48} showText={false} /></div>
+          <div className="mx-auto mb-4 flex justify-center"><HealthComplyLogo size={70} showText={false} /></div>
           <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
           <p className="text-muted-foreground mb-6 text-sm">
             Please sign in to start a compliance scan.
@@ -337,7 +337,7 @@ export default function NewScan() {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <div className="flex items-center gap-2">
-            <HealthComplyLogo size={36} showText={false} />
+            <HealthComplyLogo size={70} showText={false} />
             <span className="font-semibold">New Compliance Scan</span>
           </div>
         </div>
