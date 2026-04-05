@@ -21,8 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
-  ShieldCheck,
   Plus,
   BarChart3,
   CheckCircle2,
@@ -97,7 +97,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-sm text-center p-8">
-          <ShieldCheck className="h-12 w-12 text-primary mx-auto mb-4" />
+          <div className="mx-auto mb-4 flex justify-center"><HealthComplyLogo size={48} showText={false} /></div>
           <h2 className="text-xl font-bold mb-2">Sign In Required</h2>
           <p className="text-muted-foreground mb-6 text-sm">
             Please sign in to access your compliance dashboard.
@@ -118,8 +118,7 @@ export default function Dashboard() {
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-primary" />
-            <span className="font-bold text-base">HealthComply</span>
+            <HealthComplyLogo size={28} />
             <Badge variant="secondary" className="text-xs font-mono hidden sm:flex">SA</Badge>
           </div>
           <div className="flex items-center gap-2">
@@ -192,7 +191,7 @@ export default function Dashboard() {
             <CardContent className="pt-5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="rounded-full bg-blue-100 p-2">
-                  <ShieldCheck className="h-4 w-4 text-blue-600" />
+                  <HealthComplyLogo size={16} showText={false} />
                 </div>
                 <span className="text-sm font-medium text-muted-foreground">Avg. Score</span>
               </div>
@@ -255,7 +254,7 @@ export default function Dashboard() {
           ) : !scans || scans.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="py-16 text-center">
-                <ShieldCheck className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                <div className="mx-auto mb-4 flex justify-center opacity-30"><HealthComplyLogo size={48} showText={false} /></div>
                 <h3 className="font-semibold text-muted-foreground mb-2">No scans yet</h3>
                 <p className="text-sm text-muted-foreground mb-6">
                   Run your first compliance assessment to see results here.

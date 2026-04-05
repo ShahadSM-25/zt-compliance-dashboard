@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
+import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
-  ShieldCheck,
   Cloud,
   Cpu,
   Network,
@@ -141,8 +141,7 @@ export default function Home() {
       <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-7 w-7 text-primary" />
-            <span className="text-lg font-bold tracking-tight">HealthComply</span>
+            <HealthComplyLogo size={32} />
             <Badge variant="secondary" className="text-xs font-mono">SA</Badge>
           </div>
           <div className="flex items-center gap-3">
@@ -331,8 +330,8 @@ export default function Home() {
       <footer className="border-t border-border bg-muted/30 py-8">
         <div className="container flex flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <ShieldCheck className="h-4 w-4" />
-            <span>HealthComply — Zero Trust Compliance Platform</span>
+            <HealthComplyLogo size={20} />
+            <span>Zero Trust Compliance Platform</span>
           </div>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <span>CCC Framework</span>

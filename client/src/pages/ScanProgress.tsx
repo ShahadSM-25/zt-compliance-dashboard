@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
-  ShieldCheck,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -16,6 +16,7 @@ import {
   Server,
   Layers,
   BarChart3,
+  ShieldCheck,
 } from "lucide-react";
 
 const SCAN_STAGES = [
@@ -118,7 +119,7 @@ export default function ScanProgress() {
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-primary" />
+            <HealthComplyLogo size={22} showText={false} />
             <span className="font-semibold">Compliance Scan</span>
             {scan && (
               <Badge variant="secondary" className="text-xs font-mono">

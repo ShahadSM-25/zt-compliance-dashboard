@@ -10,8 +10,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
-  ShieldCheck,
   ArrowLeft,
   Users,
   BarChart3,
@@ -50,7 +50,7 @@ export default function Admin() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-sm text-center p-8">
-          <ShieldCheck className="h-12 w-12 text-primary mx-auto mb-4" />
+          <div className="mx-auto mb-4 flex justify-center"><HealthComplyLogo size={48} showText={false} /></div>
           <h2 className="text-xl font-bold mb-2">Sign In Required</h2>
           <Button onClick={() => { window.location.href = getLoginUrl(); }} className="w-full mt-4">Sign In</Button>
         </Card>

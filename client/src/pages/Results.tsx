@@ -30,8 +30,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { HealthComplyLogo } from "@/components/HealthComplyLogo";
 import {
-  ShieldCheck,
   CheckCircle2,
   XCircle,
   ArrowLeft,
@@ -221,7 +221,7 @@ export default function Results() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <ShieldCheck className="h-10 w-10 animate-pulse text-primary" />
+          <HealthComplyLogo size={40} showText={false} className="animate-pulse" />
           <p>Loading compliance results…</p>
         </div>
       </div>
@@ -250,7 +250,7 @@ export default function Results() {
               <ArrowLeft className="h-4 w-4 mr-1" /> Dashboard
             </Button>
             <div className="h-4 w-px bg-border" />
-            <ShieldCheck className="h-5 w-5 text-primary" />
+            <HealthComplyLogo size={22} showText={false} />
             <span className="font-semibold hidden sm:block">{scan.systemName}</span>
             <Badge variant="secondary" className="text-xs font-mono">#{scan.id}</Badge>
           </div>
