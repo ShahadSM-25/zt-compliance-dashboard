@@ -380,6 +380,81 @@ Keep the language professional but accessible to a healthcare IT manager who is 
 
         return { explanation };
       }),
+
+    analyzePolicy: protectedProcedure
+      .input(
+        z.object({
+          policyText: z.string().min(10),
+          fileName: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { policyText, fileName } = input;
+
+        const systemPrompt = `You are an expert in regulatory compliance, cloud security policy analysis, and Open Policy Agent (OPA) Rego language. You specialize in Saudi healthcare regulations including NCA CCC (Cloud Cybersecurity Controls), SeHE (Saudi Health Information Exchange), and HIPAA. Your task is to analyze policy documents and extract structured compliance rules, then generate executable Rego code for each rule.`;
+
+        const userPrompt = `Analyze the following policy document and extract all compliance rules. For each rule, generate a complete OPA Rego policy.
+
+Policy Document${fileName ? ` (${fileName})` : ""}:
+---
+${policyText.slice(0, 4000)}
+---
+
+Respond with a valid JSON object (no markdown, no code fences) in this exact structure:
+{
+  "policyName": "<name of the policy>",
+  "policyType": "<NCA CCC | SeHE | HIPAA | Internal | ISO 27001 | Other>",
+  "summary": "<2-3 sentence summary of the policy>",
+  "totalRules": <number>,
+  "rules": [
+    {
+      "id": "RULE-001",
+      "title": "<short rule title>",
+      "description": "<what this rule requires>",
+      "severity": "<critical | high | medium | low>",
+      "category": "<Access Control | Encryption | Logging | Network | Data Protection | Authentication | Other>",
+      "regoCode": "<complete valid Rego policy code for this rule>",
+      "evidenceRequired": ["<evidence type 1>", "<evidence type 2>"],
+      "testCases": [
+        {"description": "<test scenario>", "expected": "<pass | fail>"}
+      ]
+    }
+  ],
+  "warnings": ["<any ambiguous or unclear requirements found>"]
+}
+
+Extract between 3 and 8 rules. Make the Rego code realistic and syntactically correct using the 'data.compliance' package namespace. Each rule should use 'deny[msg]' pattern.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        });
+
+        const rawContent = response.choices?.[0]?.message?.content ?? "{}";
+
+        // Strip markdown code fences if present
+        const cleaned = rawContent
+          .replace(/^```(?:json)?\n?/m, "")
+          .replace(/\n?```$/m, "")
+          .trim();
+
+        try {
+          const parsed = JSON.parse(cleaned);
+          return parsed;
+        } catch {
+          // Fallback: return a minimal valid structure
+          return {
+            policyName: fileName ?? "Uploaded Policy",
+            policyType: "Other",
+            summary: "Policy analysis completed. Please review the extracted rules.",
+            totalRules: 0,
+            rules: [],
+            warnings: ["AI response could not be parsed as structured JSON. Please try again with a clearer policy document."],
+          };
+        }
+      }),
   }),
 
   // ── Organizations (Multi-Tenant) ─────────────────────────────────────────

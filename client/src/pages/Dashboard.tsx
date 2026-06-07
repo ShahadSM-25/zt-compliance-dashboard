@@ -37,6 +37,9 @@ import {
   LogOut,
   User,
   Shield,
+  Sparkles,
+  Building2,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
@@ -237,6 +240,55 @@ export default function Dashboard() {
             </Button>
           </div>
         )}
+
+        {/* ── Quick Access Cards ──────────────────────────────────────────── */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card
+            className="cursor-pointer border-purple-500/20 hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group"
+            onClick={() => navigate("/policy-engine")}
+          >
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div className="rounded-full bg-purple-500/10 p-3 mb-3">
+                  <Sparkles className="h-5 w-5 text-purple-400" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-purple-400 transition-colors mt-1" />
+              </div>
+              <h3 className="font-semibold mb-1">AI Policy Engine</h3>
+              <p className="text-sm text-muted-foreground">
+                Upload any regulatory policy document and automatically extract compliance rules with generated Rego code.
+              </p>
+              <div className="mt-3">
+                <span className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full px-2 py-0.5">
+                  NCA CCC · SeHE · HIPAA
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className="cursor-pointer border-blue-500/20 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group"
+            onClick={() => navigate("/executive")}
+          >
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div className="rounded-full bg-blue-500/10 p-3 mb-3">
+                  <Building2 className="h-5 w-5 text-blue-400" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-blue-400 transition-colors mt-1" />
+              </div>
+              <h3 className="font-semibold mb-1">Executive View</h3>
+              <p className="text-sm text-muted-foreground">
+                C-Level compliance summary with financial risk estimates, KPIs, and non-technical executive reporting.
+              </p>
+              <div className="mt-3">
+                <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full px-2 py-0.5">
+                  Board-ready · Risk Overview
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* ── Scan History Table ──────────────────────────────────────────── */}
         <div>

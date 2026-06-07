@@ -10,6 +10,8 @@ import NewScan from "./pages/NewScan";
 import ScanProgress from "./pages/ScanProgress";
 import Results from "./pages/Results";
 import Admin from "./pages/Admin";
+import PolicyEngine from "./pages/PolicyEngine";
+import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 
 function Router() {
   return (
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/scan/:id" component={ScanProgress} />
       <Route path="/results/:id" component={Results} />
       <Route path="/admin" component={Admin} />
+      <Route path="/policy-engine" component={PolicyEngine} />
+      <Route path="/executive" component={ExecutiveDashboard} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
