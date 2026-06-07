@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { getLoginUrl } from "@/const";
 
-type CloudProvider = "oci" | "aws" | "azure";
+type CloudProvider = "oci" | "aws" | "azure" | "gcp" | "sirar" | "sccc";
 type AuthMethod = "oauth2" | "api_key" | "bearer";
 type AgentType = "node_exporter" | "osquery" | "none";
 type ScanMode = "scenario_secure" | "scenario_insecure" | "scenario_mixed" | "real";
@@ -269,6 +269,8 @@ export default function NewScan() {
       if (cloudProvider === "oci") return ociCompartmentId.trim().length > 0;
       if (cloudProvider === "aws") return awsAccountId.trim().length > 0;
       if (cloudProvider === "azure") return azureSubscriptionId.trim().length > 0;
+      // GCP, sirar, sccc: just need the provider selected (no extra fields required yet)
+      if (cloudProvider === "gcp" || cloudProvider === "sirar" || cloudProvider === "sccc") return true;
     }
     if (step === 4) return apiBaseUrl.trim().length > 0;
     return true;
@@ -291,6 +293,10 @@ export default function NewScan() {
             subscriptionId: azureSubscriptionId,
             tenantId: azureTenantId,
           }),
+          // Saudi & GCP providers — connection details to be configured server-side
+          ...(cloudProvider === "sirar" && { provider: "sirar", region: "me-riyadh-1" }),
+          ...(cloudProvider === "sccc" && { provider: "sccc", region: "sa-central-1" }),
+          ...(cloudProvider === "gcp" && { provider: "gcp" }),
         };
         configSnapshot.application = {
           baseUrl: apiBaseUrl,
@@ -517,20 +523,38 @@ export default function NewScan() {
               <div className="space-y-2">
                 <Label>Cloud Provider</Label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(["oci", "aws", "azure"] as CloudProvider[]).map((p) => (
+                  {([
+                    { id: "aws", label: "AWS", flag: "🌐" },
+                    { id: "oci", label: "OCI", flag: "🌐" },
+                    { id: "azure", label: "Azure", flag: "🌐" },
+                    { id: "gcp", label: "GCP", flag: "🌐" },
+                    { id: "sirar", label: "sirar by stc", flag: "🇸🇦" },
+                    { id: "sccc", label: "SCCC Cloud", flag: "🇸🇦" },
+                  ] as { id: CloudProvider; label: string; flag: string }[]).map((p) => (
                     <button
-                      key={p}
-                      onClick={() => setCloudProvider(p)}
-                      className={`rounded-lg border-2 py-3 text-sm font-semibold uppercase tracking-wide transition-all ${
-                        cloudProvider === p
+                      key={p.id}
+                      onClick={() => setCloudProvider(p.id)}
+                      className={`rounded-lg border-2 py-3 text-xs font-semibold uppercase tracking-wide transition-all flex flex-col items-center gap-1 ${
+                        cloudProvider === p.id
                           ? "border-primary bg-primary/5 text-primary"
                           : "border-border text-muted-foreground hover:border-primary/40"
                       }`}
                     >
-                      {p}
+                      <span className="text-base">{p.flag}</span>
+                      <span>{p.label}</span>
                     </button>
                   ))}
                 </div>
+                {(cloudProvider === "sirar" || cloudProvider === "sccc") && (
+                  <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-xs text-green-800">
+                    <strong>Saudi Local Cloud:</strong> {cloudProvider === "sirar" ? "sirar by stc" : "SCCC Cloud"} is a Saudi-certified cloud provider compliant with NCA CCC requirements. Evidence collection uses the provider's API endpoints.
+                  </div>
+                )}
+                {cloudProvider === "gcp" && (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+                    <strong>Google Cloud Platform:</strong> Evidence will be collected via GCP APIs. Ensure the service account has Security Reviewer role.
+                  </div>
+                )}
               </div>
 
               {cloudProvider === "oci" && (

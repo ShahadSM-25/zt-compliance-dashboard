@@ -42,7 +42,13 @@ import {
   ChevronRight,
   Sparkles,
   Loader2,
+  Terminal,
+  Copy,
+  Check,
+  Wrench,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getRemediationCommand } from "../../../shared/remediationCommands";
 import { toast } from "sonner";
 
 const PILLAR_COLORS: Record<string, string> = {
@@ -161,6 +167,17 @@ export default function Results() {
   // AI Explainer state
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+
+  // Auto-Remediation state
+  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+
+  const handleCopyCommand = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedCommand(key);
+      toast.success("Command copied to clipboard!");
+      setTimeout(() => setCopiedCommand(null), 2500);
+    });
+  };
 
   const { data: scan, isLoading: scanLoading } = trpc.scan.getById.useQuery({ scanId }, { enabled: !!scanId });
   const { data: results, isLoading: resultsLoading } = trpc.results.getByScanId.useQuery({ scanId }, { enabled: !!scanId });
@@ -678,6 +695,100 @@ export default function Results() {
                     </div>
                   </div>
                 )}
+
+                {/* ── Auto-Remediation Section ─────────────────────────── */}
+                {selectedControl.status === "fail" && (() => {
+                  const remCmd = getRemediationCommand(selectedControl.controlId, scan?.cloudProvider as any ?? "aws");
+                  if (!remCmd) return null;
+                  const providerCmds = Object.entries(remCmd.commands).filter(([, v]) => v);
+                  return (
+                    <div className="border border-orange-200 bg-orange-50/50 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Wrench className="h-4 w-4 text-orange-600" />
+                        <span className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
+                          Guided Remediation
+                        </span>
+                      </div>
+                      <p className="text-xs text-orange-800 leading-relaxed">{remCmd.description}</p>
+
+                      <Tabs defaultValue={providerCmds[0]?.[0] ?? "aws"} className="w-full">
+                        <TabsList className="h-7 gap-1 bg-orange-100">
+                          {providerCmds.map(([provider]) => (
+                            <TabsTrigger
+                              key={provider}
+                              value={provider}
+                              className="text-xs h-6 px-2 uppercase data-[state=active]:bg-orange-600 data-[state=active]:text-white"
+                            >
+                              {provider}
+                            </TabsTrigger>
+                          ))}
+                          {remCmd.terraformSnippet && (
+                            <TabsTrigger
+                              value="terraform"
+                              className="text-xs h-6 px-2 data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                            >
+                              Terraform
+                            </TabsTrigger>
+                          )}
+                        </TabsList>
+
+                        {providerCmds.map(([provider, cmd]) => (
+                          <TabsContent key={provider} value={provider} className="mt-2">
+                            <div className="relative">
+                              <pre className="bg-gray-900 text-green-300 text-xs rounded-md p-3 overflow-x-auto whitespace-pre-wrap leading-relaxed font-mono max-h-52 overflow-y-auto">
+                                {cmd}
+                              </pre>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="absolute top-2 right-2 h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
+                                onClick={() => handleCopyCommand(cmd!, `${selectedControl.controlId}-${provider}`)}
+                              >
+                                {copiedCommand === `${selectedControl.controlId}-${provider}` ? (
+                                  <Check className="h-3.5 w-3.5 text-green-400" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </TabsContent>
+                        ))}
+
+                        {remCmd.terraformSnippet && (
+                          <TabsContent value="terraform" className="mt-2">
+                            <div className="relative">
+                              <pre className="bg-gray-900 text-purple-300 text-xs rounded-md p-3 overflow-x-auto whitespace-pre-wrap leading-relaxed font-mono max-h-52 overflow-y-auto">
+                                {remCmd.terraformSnippet}
+                              </pre>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="absolute top-2 right-2 h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
+                                onClick={() => handleCopyCommand(remCmd.terraformSnippet!, `${selectedControl.controlId}-terraform`)}
+                              >
+                                {copiedCommand === `${selectedControl.controlId}-terraform` ? (
+                                  <Check className="h-3.5 w-3.5 text-green-400" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </TabsContent>
+                        )}
+                      </Tabs>
+
+                      {remCmd.references && remCmd.references.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {remCmd.references.map((ref) => (
+                            <Badge key={ref} variant="outline" className="text-xs border-orange-300 text-orange-700">
+                              {ref}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ── AI Explainer Section ─────────────────────────────── */}
                 <div className="border-t border-border pt-4">

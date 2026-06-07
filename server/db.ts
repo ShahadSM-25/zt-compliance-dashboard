@@ -6,9 +6,13 @@ import {
   scans,
   scanResults,
   scanLogs,
+  organizations,
+  organizationMembers,
   InsertScan,
   InsertScanResult,
   InsertScanLog,
+  InsertOrganization,
+  InsertOrganizationMember,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -216,4 +220,61 @@ export async function getUserScanStats(userId: number) {
     failed: rows.filter((r) => r.status === "failed").length,
     running: rows.filter((r) => r.status === "running").length,
   };
+}
+
+// ── Organizations (Multi-Tenant) ────────────────────────────────────────────────────────────────────
+export async function createOrganization(data: InsertOrganization) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(organizations).values(data);
+  const insertId = (result as any).insertId as number;
+  const rows = await db.select().from(organizations).where(eq(organizations.id, insertId)).limit(1);
+  return rows[0];
+}
+
+export async function getOrganizationById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function listOrganizationsByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const members = await db
+    .select({ orgId: organizationMembers.organizationId })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.userId, userId));
+  if (members.length === 0) return [];
+  const orgIds = members.map((m) => m.orgId);
+  return db
+    .select()
+    .from(organizations)
+    .where(sql`${organizations.id} IN (${sql.join(orgIds.map((id) => sql`${id}`), sql`, `)})`);
+}
+
+export async function addOrganizationMember(data: InsertOrganizationMember) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(organizationMembers).values(data);
+}
+
+export async function getOrganizationMembers(orgId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(organizationMembers)
+    .where(eq(organizationMembers.organizationId, orgId));
+}
+
+export async function listScansByOrganization(orgId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(scans)
+    .where(eq(scans.organizationId, orgId))
+    .orderBy(desc(scans.createdAt));
 }

@@ -30,7 +30,8 @@ export const scans = mysqlTable("scans", {
   userId: int("userId").notNull(),
   systemName: varchar("systemName", { length: 255 }).notNull(),
   systemDescription: text("systemDescription"),
-  cloudProvider: mysqlEnum("cloudProvider", ["oci", "aws", "azure"]).notNull(),
+  cloudProvider: mysqlEnum("cloudProvider", ["oci", "aws", "azure", "gcp", "sirar", "sccc"]).notNull(),
+  organizationId: int("organizationId"),
   status: mysqlEnum("status", ["pending", "running", "completed", "failed"])
     .default("pending")
     .notNull(),
@@ -76,3 +77,29 @@ export const scanLogs = mysqlTable("scan_logs", {
 
 export type ScanLog = typeof scanLogs.$inferSelect;
 export type InsertScanLog = typeof scanLogs.$inferInsert;
+
+// ── Organizations (Multi-Tenant) ─────────────────────────────────────────────
+export const organizations = mysqlTable("organizations", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: mysqlEnum("type", ["hospital", "clinic", "lab", "other"]).default("hospital").notNull(),
+  city: varchar("city", { length: 100 }),
+  licenseNumber: varchar("licenseNumber", { length: 100 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+
+// ── Organization Members ──────────────────────────────────────────────────────
+export const organizationMembers = mysqlTable("organization_members", {
+  id: int("id").autoincrement().primaryKey(),
+  organizationId: int("organizationId").notNull(),
+  userId: int("userId").notNull(),
+  memberRole: mysqlEnum("memberRole", ["owner", "admin", "member"]).default("member").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;

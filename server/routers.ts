@@ -17,6 +17,12 @@ import {
   getScanLogs,
   getUserScanStats,
   getAllUsers,
+  createOrganization,
+  getOrganizationById,
+  listOrganizationsByUser,
+  addOrganizationMember,
+  getOrganizationMembers,
+  listScansByOrganization,
 } from "./db";
 import {
   CONTROLS,
@@ -171,7 +177,8 @@ export const appRouter = router({
         z.object({
           systemName: z.string().min(1),
           systemDescription: z.string().optional(),
-          cloudProvider: z.enum(["oci", "aws", "azure"]),
+          cloudProvider: z.enum(["oci", "aws", "azure", "gcp", "sirar", "sccc"]),
+          organizationId: z.number().optional(),
           configSnapshot: z.record(z.string(), z.unknown()).optional(),
         })
       )
@@ -181,6 +188,7 @@ export const appRouter = router({
           systemName: input.systemName,
           systemDescription: input.systemDescription ?? null,
           cloudProvider: input.cloudProvider,
+          organizationId: input.organizationId ?? null,
           status: "pending",
           configSnapshot: (input.configSnapshot ?? {}) as any,
         });
@@ -371,6 +379,46 @@ Keep the language professional but accessible to a healthcare IT manager who is 
           response.choices?.[0]?.message?.content ?? "Unable to generate explanation at this time.";
 
         return { explanation };
+      }),
+  }),
+
+  // ── Organizations (Multi-Tenant) ─────────────────────────────────────────
+  organizations: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return listOrganizationsByUser(ctx.user.id);
+    }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(2).max(255),
+          type: z.enum(["hospital", "clinic", "lab", "other"]).default("hospital"),
+          city: z.string().optional(),
+          licenseNumber: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const org = await createOrganization(input);
+        await addOrganizationMember({
+          organizationId: org.id,
+          userId: ctx.user.id,
+          memberRole: "owner",
+        });
+        return org;
+      }),
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return getOrganizationById(input.id);
+      }),
+    getMembers: protectedProcedure
+      .input(z.object({ orgId: z.number() }))
+      .query(async ({ input }) => {
+        return getOrganizationMembers(input.orgId);
+      }),
+    listScans: protectedProcedure
+      .input(z.object({ orgId: z.number() }))
+      .query(async ({ input }) => {
+        return listScansByOrganization(input.orgId);
       }),
   }),
 
