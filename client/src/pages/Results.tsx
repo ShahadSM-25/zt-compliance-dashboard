@@ -39,9 +39,9 @@ import {
   Search,
   Filter,
   AlertTriangle,
-  Info,
-  Clock,
   ChevronRight,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -125,6 +125,28 @@ function PillarBadge({ pillar }: { pillar: string }) {
   );
 }
 
+// ── AI Explanation renderer ────────────────────────────────────────────────
+function AIExplanation({ text }: { text: string }) {
+  // Render markdown-like bold (**text**) and numbered lists
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-2 text-sm leading-relaxed">
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        // Bold headings like **1. Why did this control fail?**
+        const boldLine = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        return (
+          <p
+            key={i}
+            dangerouslySetInnerHTML={{ __html: boldLine }}
+            className={line.startsWith("**") ? "font-semibold text-foreground" : "text-muted-foreground"}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Results() {
   const params = useParams<{ id: string }>();
   const scanId = parseInt(params.id ?? "0");
@@ -136,8 +158,41 @@ export default function Results() {
   const [selectedControl, setSelectedControl] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
 
+  // AI Explainer state
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [isExplaining, setIsExplaining] = useState(false);
+
   const { data: scan, isLoading: scanLoading } = trpc.scan.getById.useQuery({ scanId }, { enabled: !!scanId });
   const { data: results, isLoading: resultsLoading } = trpc.results.getByScanId.useQuery({ scanId }, { enabled: !!scanId });
+
+  const explainMutation = trpc.ai.explainControl.useMutation({
+    onSuccess: (data) => {
+      setAiExplanation(data.explanation);
+      setIsExplaining(false);
+    },
+    onError: (err) => {
+      toast.error("Failed to generate AI explanation: " + err.message);
+      setIsExplaining(false);
+    },
+  });
+
+  const handleExplain = () => {
+    if (!selectedControl) return;
+    setAiExplanation(null);
+    setIsExplaining(true);
+    explainMutation.mutate({
+      controlId: selectedControl.controlId,
+      controlTitle: selectedControl.title,
+      controlDescription: selectedControl.description ?? "",
+      pillar: selectedControl.pillar ?? "",
+      severity: selectedControl.severity ?? "medium",
+      standards: selectedControl.standards ?? [],
+      status: selectedControl.status,
+      violations: selectedControl.violations ?? [],
+      remediation: selectedControl.remediation ?? "",
+      evidenceSources: selectedControl.evidenceSources ?? [],
+    });
+  };
 
   const isLoading = scanLoading || resultsLoading;
 
@@ -500,7 +555,10 @@ export default function Results() {
                   <button
                     key={control.controlId}
                     className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
-                    onClick={() => setSelectedControl(control)}
+                    onClick={() => {
+                      setSelectedControl(control);
+                      setAiExplanation(null);
+                    }}
                   >
                     {control.status === "pass" ? (
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -533,8 +591,8 @@ export default function Results() {
       </div>
 
       {/* ── Control Detail Dialog ───────────────────────────────────────── */}
-      <Dialog open={!!selectedControl} onOpenChange={() => setSelectedControl(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+      <Dialog open={!!selectedControl} onOpenChange={() => { setSelectedControl(null); setAiExplanation(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           {selectedControl && (
             <>
               <DialogHeader>
@@ -554,6 +612,7 @@ export default function Results() {
                   </div>
                 </div>
               </DialogHeader>
+
               <div className="space-y-4 mt-2">
                 <div className="flex flex-wrap gap-2">
                   <PillarBadge pillar={selectedControl.pillar ?? ""} />
@@ -619,6 +678,49 @@ export default function Results() {
                     </div>
                   </div>
                 )}
+
+                {/* ── AI Explainer Section ─────────────────────────────── */}
+                <div className="border-t border-border pt-4">
+                  {!aiExplanation && !isExplaining && (
+                    <Button
+                      onClick={handleExplain}
+                      className="w-full gap-2"
+                      variant={selectedControl.status === "fail" ? "default" : "outline"}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {selectedControl.status === "fail"
+                        ? "Why did this control fail? (AI Explanation)"
+                        : "Explain this control (AI)"}
+                    </Button>
+                  )}
+
+                  {isExplaining && (
+                    <div className="flex items-center gap-3 justify-center py-6 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <span className="text-sm">Analyzing compliance data…</span>
+                    </div>
+                  )}
+
+                  {aiExplanation && (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-semibold text-primary uppercase tracking-wide">
+                          AI Compliance Analysis
+                        </span>
+                      </div>
+                      <AIExplanation text={aiExplanation} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs text-muted-foreground mt-2"
+                        onClick={handleExplain}
+                      >
+                        <Loader2 className="h-3 w-3 mr-1" /> Regenerate
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </>
           )}

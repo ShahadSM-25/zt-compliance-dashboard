@@ -24,6 +24,7 @@ import {
   computeBreakdowns,
 } from "../shared/controls";
 import { runRealScan } from "./engine";
+import { invokeLLM } from "./_core/llm";
 
 // ── Engine Mode ───────────────────────────────────────────────────────────────
 // Set USE_REAL_ENGINE=true to run the actual cloud-compliance-automation tool.
@@ -291,6 +292,85 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN" });
         }
         return getScanResultByScanId(input.scanId);
+      }),
+  }),
+
+  // ── AI Compliance Explainer ─────────────────────────────────────────────
+  ai: router({
+    explainControl: protectedProcedure
+      .input(
+        z.object({
+          controlId: z.string(),
+          controlTitle: z.string(),
+          controlDescription: z.string(),
+          pillar: z.string(),
+          severity: z.string(),
+          standards: z.array(z.string()),
+          status: z.enum(["pass", "fail"]),
+          violations: z.array(z.string()).optional(),
+          remediation: z.string().optional(),
+          evidenceSources: z.array(z.string()).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const {
+          controlId,
+          controlTitle,
+          controlDescription,
+          pillar,
+          severity,
+          standards,
+          status,
+          violations,
+          remediation,
+          evidenceSources,
+        } = input;
+
+        const standardsList = standards.join(", ");
+        const violationsList =
+          violations && violations.length > 0
+            ? violations.map((v, i) => `${i + 1}. ${v}`).join("\n")
+            : "No specific violations recorded.";
+        const evidenceList =
+          evidenceSources && evidenceSources.length > 0
+            ? evidenceSources.join(", ")
+            : "Not specified";
+
+        const systemPrompt = `You are a senior cybersecurity compliance expert specializing in Saudi healthcare regulations, including the NCA Cloud Cybersecurity Controls (CCC), Saudi Health Information Exchange (SeHE) policies, and HIPAA Technical Safeguards. You help healthcare IT teams understand compliance failures in plain, actionable language.`;
+
+        const userPrompt = `A compliance check has been performed on a cloud-hosted healthcare system. Below are the details of a specific control that ${status === "fail" ? "FAILED" : "PASSED"}.
+
+Control ID: ${controlId}
+Control Title: ${controlTitle}
+Description: ${controlDescription}
+Zero Trust Pillar: ${pillar}
+Severity: ${severity}
+Applicable Standards: ${standardsList}
+Evidence Sources: ${evidenceList}
+Violations Detected:
+${violationsList}
+Existing Remediation Guidance: ${remediation ?? "None provided"}
+
+Please provide a clear, structured explanation with the following sections:
+
+1. **Why did this control ${status === "fail" ? "fail" : "pass"}?** (2-3 sentences explaining the root cause in plain language, referencing the specific regulation if applicable)
+2. **What is the risk?** (1-2 sentences on what could go wrong if this is not addressed)
+3. **Step-by-step remediation** (3-5 concrete, actionable steps the IT team should take to fix this)
+4. **Regulatory reference** (Which specific article or section of CCC, SeHE, or HIPAA this maps to)
+
+Keep the language professional but accessible to a healthcare IT manager who is not a cybersecurity expert.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        });
+
+        const explanation =
+          response.choices?.[0]?.message?.content ?? "Unable to generate explanation at this time.";
+
+        return { explanation };
       }),
   }),
 
