@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { upsertUser, getUserByOpenId, getDb, runMigrations } from "../db";
+import { upsertUser, getUserByOpenId, getDb, runMigrations, applySchemaPatches } from "../db";
 import { users } from "../../drizzle/schema";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -48,6 +48,8 @@ async function startServer() {
   };
   runMigrationsWithRetry().then(async (success) => {
     if (!success) return;
+    // ── Apply schema patches (idempotent ALTER TABLE upgrades) ──────────────────
+    await applySchemaPatches();
     // ── Local Dev Mode: seed mock admin user into DB (with retry) ────────────────
     if (!process.env.OAUTH_SERVER_URL) {
     const seedLocalDevUser = async (retries = 10, delayMs = 2000) => {

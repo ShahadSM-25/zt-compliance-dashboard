@@ -34,6 +34,68 @@ export async function getDb() {
   return _db;
 }
 
+// ── Schema Patches (safe ALTER TABLE upgrades applied on every boot) ─────────
+// These run AFTER migrations and are idempotent — safe to run multiple times.
+export async function applySchemaPatches(): Promise<void> {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    const conn = await mysql.createConnection(process.env.DATABASE_URL);
+
+    // Patch 1: Add organizationId column to scans if missing
+    try {
+      await conn.execute(`ALTER TABLE \`scans\` ADD COLUMN \`organizationId\` int DEFAULT NULL`);
+      console.log("[Database] ✅ Patch: added organizationId to scans");
+    } catch (e: any) {
+      if (!e.message?.includes("Duplicate column") && !e.message?.includes("already exists")) {
+        console.warn("[Database] organizationId patch:", e.message);
+      }
+    }
+
+    // Patch 2: Expand cloudProvider enum to include gcp, sirar, sccc
+    try {
+      await conn.execute(`ALTER TABLE \`scans\` MODIFY COLUMN \`cloudProvider\` enum('oci','aws','azure','gcp','sirar','sccc') NOT NULL`);
+      console.log("[Database] ✅ Patch: expanded cloudProvider enum");
+    } catch (e: any) {
+      console.warn("[Database] cloudProvider enum patch:", e.message);
+    }
+
+    // Patch 3: Create organizations table if missing
+    try {
+      await conn.execute(`CREATE TABLE IF NOT EXISTS \`organizations\` (
+        \`id\` int AUTO_INCREMENT NOT NULL,
+        \`name\` varchar(255) NOT NULL,
+        \`type\` enum('hospital','clinic','lab','other') NOT NULL DEFAULT 'hospital',
+        \`city\` varchar(100),
+        \`licenseNumber\` varchar(100),
+        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+        \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT \`organizations_id\` PRIMARY KEY(\`id\`)
+      )`);
+    } catch (e: any) {
+      if (!e.message?.includes("already exists")) console.warn("[Database] organizations table patch:", e.message);
+    }
+
+    // Patch 4: Create organization_members table if missing
+    try {
+      await conn.execute(`CREATE TABLE IF NOT EXISTS \`organization_members\` (
+        \`id\` int AUTO_INCREMENT NOT NULL,
+        \`organizationId\` int NOT NULL,
+        \`userId\` int NOT NULL,
+        \`memberRole\` enum('owner','admin','member') NOT NULL DEFAULT 'member',
+        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+        CONSTRAINT \`organization_members_id\` PRIMARY KEY(\`id\`)
+      )`);
+    } catch (e: any) {
+      if (!e.message?.includes("already exists")) console.warn("[Database] organization_members table patch:", e.message);
+    }
+
+    await conn.end();
+    console.log("[Database] ✅ Schema patches applied.");
+  } catch (err: any) {
+    console.warn("[Database] ⚠️  Schema patches failed:", err.message);
+  }
+}
+
 export async function runMigrations(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     console.warn("[Database] No DATABASE_URL set, skipping migrations.");
