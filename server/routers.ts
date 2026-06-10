@@ -31,6 +31,7 @@ import {
 } from "../shared/controls";
 import { runRealScan } from "./engine";
 import { invokeLLM } from "./_core/llm";
+import { isBedrockConfigured, invokeBedrock } from "./_core/bedrock";
 
 // ── Engine Mode ───────────────────────────────────────────────────────────────
 // Set USE_REAL_ENGINE=true to run the actual cloud-compliance-automation tool.
@@ -425,14 +426,23 @@ Respond with a valid JSON object (no markdown, no code fences) in this exact str
 
 Extract between 3 and 8 rules. Make the Rego code realistic and syntactically correct using the 'data.compliance' package namespace. Each rule should use 'deny[msg]' pattern.`;
 
-        const response = await invokeLLM({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        });
+        let rawContent: string;
 
-        const rawContent = response.choices?.[0]?.message?.content ?? "{}";
+        // Use Amazon Bedrock if AWS credentials are configured, otherwise use OpenAI
+        if (isBedrockConfigured()) {
+          rawContent = await invokeBedrock({
+            messages: [{ role: "user", content: userPrompt }],
+            systemPrompt,
+          });
+        } else {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+          });
+          rawContent = response.choices?.[0]?.message?.content ?? "{}";
+        }
 
         // Strip markdown code fences if present
         const cleaned = rawContent

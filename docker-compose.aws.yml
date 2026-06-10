@@ -1,0 +1,102 @@
+# =============================================================================
+# HealthComply Dashboard — AWS Production Deployment
+# =============================================================================
+# This configuration is optimized for running on an AWS EC2 instance.
+# It uses host networking or standard ports and configures AWS Bedrock.
+
+version: "3.8"
+
+services:
+  # ── Dashboard (Node.js Server + Vite Frontend) ─────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: healthcomply_dashboard
+    restart: always
+    ports:
+      - "80:3000" # Expose directly on port 80 for production
+    environment:
+      NODE_ENV: production
+      # ── Engine Integration ──────────────────────────────────────────────
+      COMPLIANCE_ENGINE_PATH: /engine
+      USE_REAL_ENGINE: "true"
+      # ── Database ────────────────────────────────────────────────────────
+      DATABASE_URL: mysql://healthcomply:healthcomply_pass@mysql:3306/healthcomply
+      # ── HIS Mock URL ────────────────────────────────────────────────────
+      HIS_MOCK_URL: http://nginx:8080
+      
+      # ── AWS Bedrock Integration (AI Policy Engine) ──────────────────────
+      # These will be populated from the EC2 instance's environment variables
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+      BEDROCK_MODEL_ID: anthropic.claude-3-5-sonnet-20241022-v2:0
+
+    volumes:
+      - ../cloud-compliance-automation:/engine:rw
+      - compliance_evidence:/engine/evidence/runtime
+    networks:
+      - healthcomply_net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nginx:
+        condition: service_started
+
+  # ── MySQL Database ─────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: healthcomply_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: healthcomply
+      MYSQL_USER: healthcomply
+      MYSQL_PASSWORD: healthcomply_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - healthcomply_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── HIS Mock API (FastAPI) ─────────────────────────────────────────────────
+  his-mock:
+    build:
+      context: ../cloud-compliance-automation/mock_his
+      dockerfile: Dockerfile
+    container_name: healthcomply_his_mock
+    restart: always
+    environment:
+      SECRET_KEY: "prod-secret-key-healthcomply"
+      ENVIRONMENT: "production"
+      RBAC_ENABLED: "true"
+      AUDIT_ENABLED: "true"
+      MFA_REQUIRED: "true"
+    networks:
+      - healthcomply_net
+
+  # ── Nginx (Reverse Proxy for HIS Mock) ─────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: healthcomply_nginx
+    restart: always
+    volumes:
+      - ../cloud-compliance-automation/mock_his/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - healthcomply_net
+    depends_on:
+      - his-mock
+
+volumes:
+  mysql_data:
+  compliance_evidence:
+
+networks:
+  healthcomply_net:
+    driver: bridge
