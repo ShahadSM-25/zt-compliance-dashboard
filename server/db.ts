@@ -34,65 +34,115 @@ export async function getDb() {
   return _db;
 }
 
-// ── Schema Patches (safe ALTER TABLE upgrades applied on every boot) ─────────
-// These run AFTER migrations and are idempotent — safe to run multiple times.
+// ── Schema Bootstrap (runs on every boot, fully idempotent) ──────────────────
+// Creates all required tables and columns directly in code.
+// This bypasses the migration file system which is not available in production
+// Docker builds (drizzle/ directory is not copied to dist/).
 export async function applySchemaPatches(): Promise<void> {
   if (!process.env.DATABASE_URL) return;
   try {
     const conn = await mysql.createConnection(process.env.DATABASE_URL);
 
-    // Patch 1: Add organizationId column to scans if missing
+    // ── Create users table ──────────────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`users\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`openId\` varchar(64) NOT NULL,
+      \`name\` text,
+      \`email\` varchar(320),
+      \`loginMethod\` varchar(64),
+      \`role\` enum('user','admin') NOT NULL DEFAULT 'user',
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+      \`lastSignedIn\` timestamp NOT NULL DEFAULT (now()),
+      CONSTRAINT \`users_id\` PRIMARY KEY(\`id\`),
+      CONSTRAINT \`users_openId_unique\` UNIQUE(\`openId\`)
+    )`).catch(() => {});
+
+    // ── Create scans table (full schema with all columns) ───────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`scans\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`userId\` int NOT NULL,
+      \`systemName\` varchar(255) NOT NULL,
+      \`systemDescription\` text,
+      \`cloudProvider\` enum('oci','aws','azure','gcp','sirar','sccc') NOT NULL DEFAULT 'oci',
+      \`organizationId\` int DEFAULT NULL,
+      \`status\` enum('pending','running','completed','failed') NOT NULL DEFAULT 'pending',
+      \`configSnapshot\` json,
+      \`startedAt\` timestamp NULL,
+      \`completedAt\` timestamp NULL,
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT \`scans_id\` PRIMARY KEY(\`id\`)
+    )`).catch(() => {});
+
+    // ── Patch existing scans table: add organizationId if missing ───────────
     try {
       await conn.execute(`ALTER TABLE \`scans\` ADD COLUMN \`organizationId\` int DEFAULT NULL`);
       console.log("[Database] ✅ Patch: added organizationId to scans");
     } catch (e: any) {
-      if (!e.message?.includes("Duplicate column") && !e.message?.includes("already exists")) {
-        console.warn("[Database] organizationId patch:", e.message);
-      }
+      // Ignore "Duplicate column" — column already exists
     }
 
-    // Patch 2: Expand cloudProvider enum to include gcp, sirar, sccc
+    // ── Patch existing scans table: expand cloudProvider enum ───────────────
     try {
-      await conn.execute(`ALTER TABLE \`scans\` MODIFY COLUMN \`cloudProvider\` enum('oci','aws','azure','gcp','sirar','sccc') NOT NULL`);
+      await conn.execute(`ALTER TABLE \`scans\` MODIFY COLUMN \`cloudProvider\` enum('oci','aws','azure','gcp','sirar','sccc') NOT NULL DEFAULT 'oci'`);
       console.log("[Database] ✅ Patch: expanded cloudProvider enum");
     } catch (e: any) {
-      console.warn("[Database] cloudProvider enum patch:", e.message);
+      // Ignore if already correct
     }
 
-    // Patch 3: Create organizations table if missing
-    try {
-      await conn.execute(`CREATE TABLE IF NOT EXISTS \`organizations\` (
-        \`id\` int AUTO_INCREMENT NOT NULL,
-        \`name\` varchar(255) NOT NULL,
-        \`type\` enum('hospital','clinic','lab','other') NOT NULL DEFAULT 'hospital',
-        \`city\` varchar(100),
-        \`licenseNumber\` varchar(100),
-        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
-        \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-        CONSTRAINT \`organizations_id\` PRIMARY KEY(\`id\`)
-      )`);
-    } catch (e: any) {
-      if (!e.message?.includes("already exists")) console.warn("[Database] organizations table patch:", e.message);
-    }
+    // ── Create scan_results table ───────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`scan_results\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`scanId\` int NOT NULL,
+      \`overallScore\` float NOT NULL DEFAULT 0,
+      \`totalControls\` int NOT NULL DEFAULT 0,
+      \`passedControls\` int NOT NULL DEFAULT 0,
+      \`failedControls\` int NOT NULL DEFAULT 0,
+      \`controlResults\` json,
+      \`pillarBreakdown\` json,
+      \`severityBreakdown\` json,
+      \`standardBreakdown\` json,
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      CONSTRAINT \`scan_results_id\` PRIMARY KEY(\`id\`)
+    )`).catch(() => {});
 
-    // Patch 4: Create organization_members table if missing
-    try {
-      await conn.execute(`CREATE TABLE IF NOT EXISTS \`organization_members\` (
-        \`id\` int AUTO_INCREMENT NOT NULL,
-        \`organizationId\` int NOT NULL,
-        \`userId\` int NOT NULL,
-        \`memberRole\` enum('owner','admin','member') NOT NULL DEFAULT 'member',
-        \`createdAt\` timestamp NOT NULL DEFAULT (now()),
-        CONSTRAINT \`organization_members_id\` PRIMARY KEY(\`id\`)
-      )`);
-    } catch (e: any) {
-      if (!e.message?.includes("already exists")) console.warn("[Database] organization_members table patch:", e.message);
-    }
+    // ── Create scan_logs table ──────────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`scan_logs\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`scanId\` int NOT NULL,
+      \`level\` enum('info','warn','error','success') NOT NULL DEFAULT 'info',
+      \`message\` text NOT NULL,
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      CONSTRAINT \`scan_logs_id\` PRIMARY KEY(\`id\`)
+    )`).catch(() => {});
+
+    // ── Create organizations table ──────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`organizations\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`name\` varchar(255) NOT NULL,
+      \`type\` enum('hospital','clinic','lab','other') NOT NULL DEFAULT 'hospital',
+      \`city\` varchar(100),
+      \`licenseNumber\` varchar(100),
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT \`organizations_id\` PRIMARY KEY(\`id\`)
+    )`).catch(() => {});
+
+    // ── Create organization_members table ───────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`organization_members\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`organizationId\` int NOT NULL,
+      \`userId\` int NOT NULL,
+      \`memberRole\` enum('owner','admin','member') NOT NULL DEFAULT 'member',
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      CONSTRAINT \`organization_members_id\` PRIMARY KEY(\`id\`)
+    )`).catch(() => {});
 
     await conn.end();
-    console.log("[Database] ✅ Schema patches applied.");
+    console.log("[Database] ✅ Schema bootstrap complete — all tables ready.");
   } catch (err: any) {
-    console.warn("[Database] ⚠️  Schema patches failed:", err.message);
+    console.warn("[Database] ⚠️  Schema bootstrap failed:", err.message);
   }
 }
 
